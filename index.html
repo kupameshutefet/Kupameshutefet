@@ -12,7 +12,7 @@
 <meta name="theme-color" content="#5AA89E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Rubik:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 
@@ -95,11 +95,51 @@
         <span>סיסמא (לפחות 6 תווים)</span>
         <input type="password" id="reg-password" required minlength="6" autocomplete="new-password" placeholder="••••••">
       </label>
+      <label class="field">
+        <span>קוד גישה 🔑</span>
+        <input type="text" id="reg-access-code" placeholder="KUPA-XXXXXX" autocomplete="off" style="text-transform:uppercase;letter-spacing:2px;font-weight:700;">
+      </label>
       <button type="submit" class="submit-btn" id="reg-submit-btn">יצירת הקופה שלנו 🎉</button>
     </form>
 
     <p id="auth-error" class="auth-error hidden"></p>
     <p id="auth-loading" class="auth-loading hidden">טוען...</p>
+  </div>
+</div>
+
+<!-- Admin panel — shown only to yosetre@icloud.com -->
+<div id="admin-overlay" class="admin-overlay hidden">
+  <div class="admin-topbar">
+    <div class="admin-brand">
+      <img src="icon-180.png" style="width:36px;height:36px;border-radius:10px;">
+      <div>
+        <div class="admin-brand-title">הקופה המשותפת — מנהל</div>
+        <div class="admin-brand-sub">yosetre@icloud.com</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="admin-icon-btn" id="admin-refresh-btn" title="רענן">↻</button>
+      <button class="admin-icon-btn" id="admin-logout-btn">יציאה</button>
+    </div>
+  </div>
+
+  <div class="admin-tabs-bar">
+    <button class="admin-tab active" data-admin-tab="users">👥 משתמשים</button>
+    <button class="admin-tab" data-admin-tab="codes">🔑 קודי גישה</button>
+  </div>
+
+  <!-- Users panel -->
+  <div id="admin-users-panel" class="admin-panel">
+    <div id="admin-users-list"><p class="admin-loading">טוען...</p></div>
+  </div>
+
+  <!-- Codes panel -->
+  <div id="admin-codes-panel" class="admin-panel hidden">
+    <div class="admin-generate-row">
+      <input type="text" id="admin-code-note" class="admin-code-note-input" placeholder="הערה (לדוגמה: דוד ורחל - שולמו)">
+      <button id="admin-generate-code-btn" class="admin-generate-btn">+ צור קוד חדש</button>
+    </div>
+    <div id="admin-codes-list"><p class="admin-loading">טוען...</p></div>
   </div>
 </div>
 
@@ -894,6 +934,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

@@ -13,6 +13,11 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 
+// Top-level collections (not per-user)
+const accessCodesRef = db.collection("accessCodes");
+const userStatusRef  = db.collection("userStatus");
+const ADMIN_EMAIL = "yosetre@icloud.com";
+
 // Firestore refs — set per-user after login
 let expensesRef, incomeRef, debtsRef, recurringRef, eventsRef, configRef;
 let firestoreUnsubscribers = [];
@@ -181,18 +186,42 @@ function updatePartnerNamesInUI() {
 /* ============================================================
    3) Auth state — drives everything
    ============================================================ */
-auth.onAuthStateChanged((user) => {
+function showApp(user) {
+  document.getElementById("auth-overlay").classList.add("hidden");
+  document.getElementById("admin-overlay").classList.add("hidden");
+  document.getElementById("app").classList.remove("app-hidden");
+  initFirestoreRefs(user.uid);
+  startFirestoreListeners();
+  const emailEl = document.getElementById("settings-user-email");
+  if (emailEl) emailEl.textContent = user.email;
+}
+
+auth.onAuthStateChanged(async (user) => {
   if (user) {
-    document.getElementById("auth-overlay").classList.add("hidden");
-    document.getElementById("app").classList.remove("app-hidden");
-    initFirestoreRefs(user.uid);
-    startFirestoreListeners();
-    const emailEl = document.getElementById("settings-user-email");
-    if (emailEl) emailEl.textContent = user.email;
+    if (user.email === ADMIN_EMAIL) {
+      // Admin → show admin panel, not the app
+      document.getElementById("auth-overlay").classList.add("hidden");
+      document.getElementById("app").classList.add("app-hidden");
+      document.getElementById("admin-overlay").classList.remove("hidden");
+      loadAdminPanel();
+    } else {
+      // Check if user is blocked before showing the app
+      try {
+        const statusDoc = await userStatusRef.doc(user.uid).get();
+        if (statusDoc.exists && statusDoc.data().status === "blocked") {
+          await auth.signOut();
+          document.getElementById("auth-overlay").classList.remove("hidden");
+          showAuthError("החשבון שלך חסום. לפרטים: " + ADMIN_EMAIL);
+          return;
+        }
+      } catch(e) { /* if no status doc yet, that's fine */ }
+      showApp(user);
+    }
   } else {
     stopFirestoreListeners();
-    allExpenses = []; allIncome = []; allDebts = []; allRecurring = []; allEvents = [];
+    allExpenses=[]; allIncome=[]; allDebts=[]; allRecurring=[]; allEvents=[];
     document.getElementById("auth-overlay").classList.remove("hidden");
+    document.getElementById("admin-overlay").classList.add("hidden");
     document.getElementById("app").classList.add("app-hidden");
   }
 });
@@ -272,12 +301,38 @@ document.getElementById("register-form").addEventListener("submit", (e) => {
   if (!p1Name) { showAuthError("נא להזין שם"); return; }
   if (registerMode === "couple" && !p2Name) { showAuthError("נא להזין שמות לשני בני הזוג"); return; }
   setAuthLoading(true);
-  auth.createUserWithEmailAndPassword(email, password).then((cred) => {
+  const accessCode = document.getElementById("reg-access-code").value.trim().toUpperCase();
+  if (!accessCode) { showAuthError("נא להזין קוד גישה"); setAuthLoading(false); return; }
+
+  auth.createUserWithEmailAndPassword(email, password).then(async (cred) => {
     const uid = cred.user.uid;
+    // Validate the access code (now we're authenticated, can read accessCodes)
+    const codeDoc = await accessCodesRef.doc(accessCode).get();
+    if (!codeDoc.exists || codeDoc.data().used) {
+      // Invalid or already used code → delete auth user and bail
+      await cred.user.delete().catch(()=>{});
+      await auth.signOut();
+      setAuthLoading(false);
+      showAuthError("קוד הגישה שגוי או כבר בשימוש. פנה ל-" + ADMIN_EMAIL);
+      return;
+    }
+    // Mark code as used
+    const batch = db.batch();
+    batch.update(accessCodesRef.doc(accessCode), { used: true, usedBy: email, usedAt: firebase.firestore.Timestamp.now() });
+    // Write user status for admin
+    batch.set(userStatusRef.doc(uid), {
+      email, uid,
+      partner1Name: p1Name, partner2Name: p2Name || null,
+      accountType: registerMode,
+      status: "active",
+      registeredAt: firebase.firestore.Timestamp.now(),
+      accessCode
+    });
+    // Write user config
     const userDoc = db.collection("users").doc(uid);
     const defaultCfg = {
       partner1Name: p1Name,
-      partner2Name: p2Name,
+      partner2Name: p2Name || null,
       accountType: registerMode,
       categories: DEFAULT_CATEGORIES,
       incomeCategories: DEFAULT_INCOME_CATEGORIES,
@@ -289,7 +344,8 @@ document.getElementById("register-form").addEventListener("submit", (e) => {
       maaserEnabled: false,
       isSelfEmployed: false
     };
-    return userDoc.collection("meta").doc("config").set(defaultCfg);
+    batch.set(userDoc.collection("meta").doc("config"), defaultCfg);
+    await batch.commit();
   }).catch((err) => {
     setAuthLoading(false);
     showAuthError(authErrorMessage(err.code), err.code);
@@ -1782,6 +1838,136 @@ document.getElementById("toggle-maaser").addEventListener("change", (e) => {
 document.getElementById("toggle-self-employed").addEventListener("change", (e) => {
   configRef.set({ isSelfEmployed: e.target.checked }, { merge: true });
 });
+
+/* ============================================================
+   ADMIN PANEL
+   ============================================================ */
+function generateCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "KUPA-";
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+let adminActiveTab = "users";
+
+async function loadAdminPanel() {
+  renderAdminTabs();
+  if (adminActiveTab === "users") await loadAdminUsers();
+  else await loadAdminCodes();
+}
+
+function renderAdminTabs() {
+  document.querySelectorAll(".admin-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.adminTab === adminActiveTab);
+  });
+  document.getElementById("admin-users-panel").classList.toggle("hidden", adminActiveTab !== "users");
+  document.getElementById("admin-codes-panel").classList.toggle("hidden", adminActiveTab !== "codes");
+}
+
+async function loadAdminUsers() {
+  const listEl = document.getElementById("admin-users-list");
+  listEl.innerHTML = `<p class="admin-loading">טוען משתמשים...</p>`;
+  try {
+    const snap = await userStatusRef.orderBy("registeredAt", "desc").get();
+    if (snap.empty) { listEl.innerHTML = `<p class="admin-empty">אין משתמשים רשומים עדיין</p>`; return; }
+    listEl.innerHTML = snap.docs.map((doc) => {
+      const d = doc.data();
+      const date = d.registeredAt ? d.registeredAt.toDate().toLocaleDateString("he-IL") : "—";
+      const names = d.accountType === "solo" ? d.partner1Name : `${d.partner1Name} + ${d.partner2Name || ""}`;
+      const modeLabel = d.accountType === "solo" ? "יחיד/ה" : "זוג";
+      const isBlocked = d.status === "blocked";
+      return `<div class="admin-user-row">
+        <div class="admin-user-info">
+          <div class="admin-user-email">${escapeHtml(d.email || "—")}</div>
+          <div class="admin-user-meta">${escapeHtml(names)} · ${modeLabel} · נרשם ${date}</div>
+          <div class="admin-user-meta">קוד: ${escapeHtml(d.accessCode || "—")}</div>
+        </div>
+        <div>
+          <span class="admin-status-badge ${isBlocked ? "badge-blocked" : "badge-active"}">${isBlocked ? "חסום" : "פעיל"}</span>
+          <button class="admin-action-btn" onclick="toggleUserStatus('${doc.id}', '${isBlocked ? "active" : "blocked"}', this)">
+            ${isBlocked ? "🔓 פתח" : "🔒 חסום"}
+          </button>
+        </div>
+      </div>`;
+    }).join("");
+  } catch(e) {
+    listEl.innerHTML = `<p class="admin-empty" style="color:red">שגיאה: ${e.message}</p>`;
+  }
+}
+
+async function toggleUserStatus(uid, newStatus, btn) {
+  btn.disabled = true;
+  try {
+    await userStatusRef.doc(uid).update({ status: newStatus });
+    await loadAdminUsers();
+  } catch(e) { btn.disabled = false; alert("שגיאה: " + e.message); }
+}
+
+async function loadAdminCodes() {
+  const listEl = document.getElementById("admin-codes-list");
+  listEl.innerHTML = `<p class="admin-loading">טוען קודים...</p>`;
+  try {
+    const snap = await accessCodesRef.orderBy("createdAt", "desc").get();
+    if (snap.empty) { listEl.innerHTML = `<p class="admin-empty">אין קודי גישה עדיין — צור קוד חדש למעלה</p>`; return; }
+    listEl.innerHTML = snap.docs.map((doc) => {
+      const d = doc.data();
+      const date = d.createdAt ? d.createdAt.toDate().toLocaleDateString("he-IL") : "—";
+      const isUsed = d.used;
+      return `<div class="admin-code-row">
+        <div>
+          <span class="admin-code-text">${escapeHtml(doc.id)}</span>
+          ${d.note ? `<span class="admin-code-note">${escapeHtml(d.note)}</span>` : ""}
+        </div>
+        <div style="text-align:start">
+          <span class="admin-status-badge ${isUsed ? "badge-used" : "badge-active"}">${isUsed ? "שומש" : "פנוי"}</span>
+          ${isUsed ? `<div class="admin-code-usedby">↳ ${escapeHtml(d.usedBy || "")}</div>` : ""}
+          <div class="admin-code-date">${date}</div>
+        </div>
+        ${!isUsed ? `<button class="admin-del-btn" onclick="deleteCode('${doc.id}', this)">🗑</button>` : ""}
+      </div>`;
+    }).join("");
+  } catch(e) {
+    listEl.innerHTML = `<p class="admin-empty" style="color:red">שגיאה: ${e.message}</p>`;
+  }
+}
+
+async function generateAndSaveCode() {
+  const note = document.getElementById("admin-code-note").value.trim();
+  const code = generateCode();
+  try {
+    await accessCodesRef.doc(code).set({
+      used: false, note, createdAt: firebase.firestore.Timestamp.now()
+    });
+    document.getElementById("admin-code-note").value = "";
+    await loadAdminCodes();
+    // Show the code prominently
+    showToast(`קוד חדש: ${code} 📋`);
+  } catch(e) { alert("שגיאה: " + e.message); }
+}
+
+async function deleteCode(code, btn) {
+  if (!confirm(`למחוק את הקוד ${code}?`)) return;
+  btn.disabled = true;
+  try {
+    await accessCodesRef.doc(code).delete();
+    await loadAdminCodes();
+  } catch(e) { btn.disabled = false; alert("שגיאה: " + e.message); }
+}
+
+document.querySelectorAll(".admin-tab").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    adminActiveTab = btn.dataset.adminTab;
+    renderAdminTabs();
+    if (adminActiveTab === "users") await loadAdminUsers();
+    else await loadAdminCodes();
+  });
+});
+
+document.getElementById("admin-generate-code-btn").addEventListener("click", generateAndSaveCode);
+
+document.getElementById("admin-logout-btn").addEventListener("click", () => auth.signOut());
+document.getElementById("admin-refresh-btn").addEventListener("click", () => loadAdminPanel());
 
 /* ============================================================
    15) Init
