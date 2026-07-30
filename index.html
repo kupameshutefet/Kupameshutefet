@@ -208,6 +208,7 @@
 
   <div class="admin-tabs-bar">
     <button class="admin-tab active" data-admin-tab="users">👥 משתמשים</button>
+    <button class="admin-tab" data-admin-tab="inquiries">📩 פניות</button>
     <button class="admin-tab" data-admin-tab="version">🔔 גרסה</button>
     <button class="admin-tab" data-admin-tab="codes">🔑 קודים</button>
   </div>
@@ -215,6 +216,11 @@
   <!-- Users panel -->
   <div id="admin-users-panel" class="admin-panel">
     <div id="admin-users-list"><p class="admin-loading">טוען...</p></div>
+  </div>
+
+  <!-- Inquiries panel -->
+  <div id="admin-inquiries-panel" class="admin-panel hidden">
+    <div id="admin-inquiries-list"><p class="admin-loading">טוען פניות...</p></div>
   </div>
 
   <!-- Version panel -->
@@ -629,6 +635,37 @@
     </div>
   </section>
 
+  <!-- ============== CONTACT VIEW ============== -->
+  <section class="view hidden" data-view="contact">
+    <div class="panel">
+      <div class="panel-head"><h2>צור קשר 💬</h2></div>
+      <p class="panel-desc">יש תקלה? רעיון לשיפור? נשמח לשמוע — הפנייה תגיע ישירות אלינו.</p>
+    </div>
+    <div class="panel">
+      <div class="field">
+        <span>נושא הפנייה</span>
+        <div class="contact-topic-row">
+          <button type="button" class="contact-topic-btn active" data-topic="תקלה">🐛 תקלה</button>
+          <button type="button" class="contact-topic-btn" data-topic="המלצה">💡 המלצה</button>
+          <button type="button" class="contact-topic-btn" data-topic="שאלה">❓ שאלה</button>
+          <button type="button" class="contact-topic-btn" data-topic="אחר">✉️ אחר</button>
+        </div>
+      </div>
+      <label class="field">
+        <span>הודעה</span>
+        <textarea id="contact-message" rows="5" placeholder="כתבו כאן..." style="width:100%;border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-family:inherit;font-size:14px;resize:vertical;background:var(--bg);color:var(--text);"></textarea>
+      </label>
+      <div class="field">
+        <span>תמונה (אופציונלי)</span>
+        <input type="file" id="contact-image-input" accept="image/*" class="hidden">
+        <button type="button" id="contact-image-btn" class="mini-btn" style="width:100%;padding:10px;">📎 צרף תמונה</button>
+        <div id="contact-image-preview" class="contact-image-preview hidden"></div>
+      </div>
+      <button id="contact-send-btn" class="submit-btn">שליחת הפנייה 📤</button>
+      <p id="contact-success" class="contact-success hidden">✅ הפנייה נשלחה! נחזור אליכם בהקדם.</p>
+    </div>
+  </section>
+
   <!-- ============== RECURRING (EXPENSE + INCOME) VIEW ============== -->
   <section class="view hidden" data-view="recurring">
     <div class="panel">
@@ -1040,6 +1077,10 @@
         <span class="drawer-icon">⚙️</span>
         <span class="drawer-item-text"><span class="drawer-item-title">הגדרות</span><span class="drawer-item-sub">קטגוריות ועוד</span></span>
       </button>
+      <button class="drawer-item" data-view="contact">
+        <span class="drawer-icon">💬</span>
+        <span class="drawer-item-text"><span class="drawer-item-title">צור קשר</span><span class="drawer-item-sub">תקלות, המלצות ושאלות</span></span>
+      </button>
     </div>
   </nav>
 </div>
@@ -1048,7 +1089,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=7"></script>
 
 <!-- Service Worker registration -->
 <script>

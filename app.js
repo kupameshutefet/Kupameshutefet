@@ -513,6 +513,7 @@ function renderCurrentView() {
   else if (currentView === "debts") renderDebtsView();
   else if (currentView === "recurring") renderRecurringView();
   else if (currentView === "settings") renderSettingsView();
+  else if (currentView === "contact") renderContactView();
 }
 
 /* ============================================================
@@ -1458,13 +1459,20 @@ function renderSettingsView() {
   const modeLabel = soloMode() ? "🧍 יחיד/ה" : "💑 זוג";
   if (emailEl && user) emailEl.textContent = `${user.email} | ${p1()}${soloMode() ? "" : ` ו${p2()}`} | ${modeLabel}`;
 }
+function pinAcherLast(list) {
+  const without = list.filter((c) => c !== "אחר");
+  return list.includes("אחר") ? [...without, "אחר"] : without;
+}
 function renderCategoryChips(container, list, field) {
-  container.innerHTML = list.map((cat) => `<span class="category-chip">${escapeHtml(cat)}<button data-cat="${escapeHtml(cat)}" aria-label="הסר">✕</button></span>`).join("");
+  const sorted = pinAcherLast(list);
+  container.innerHTML = sorted.map((cat) => `<span class="category-chip">${escapeHtml(cat)}<button data-cat="${escapeHtml(cat)}" data-field="${field}" aria-label="הסר">✕</button></span>`).join("");
   container.querySelectorAll("button").forEach((btn) => {
     btn.addEventListener("click", () => {
-      if (list.length <= 1) return;
-      const newList = list.filter((c) => c !== btn.dataset.cat);
-      configRef.set({ [field]: newList }, { merge: true });
+      if (btn.dataset.cat === "אחר") return; // can't delete "אחר"
+      const currentList = btn.dataset.field === "categories" ? config.categories : config.incomeCategories;
+      if (currentList.length <= 1) return;
+      const newList = pinAcherLast(currentList.filter((c) => c !== btn.dataset.cat));
+      configRef.set({ [btn.dataset.field]: newList }, { merge: true });
     });
   });
 }
@@ -1472,13 +1480,15 @@ document.getElementById("add-category-btn").addEventListener("click", () => {
   const input = document.getElementById("new-category-input");
   const val = input.value.trim();
   if (!val || config.categories.includes(val)) return;
-  configRef.set({ categories: [...config.categories, val] }, { merge: true }).then(() => { input.value = ""; });
+  const newList = pinAcherLast([...config.categories, val]);
+  configRef.set({ categories: newList }, { merge: true }).then(() => { input.value = ""; });
 });
 document.getElementById("add-income-category-btn").addEventListener("click", () => {
   const input = document.getElementById("new-income-category-input");
   const val = input.value.trim();
   if (!val || config.incomeCategories.includes(val)) return;
-  configRef.set({ incomeCategories: [...config.incomeCategories, val] }, { merge: true }).then(() => { input.value = ""; });
+  const newList = pinAcherLast([...config.incomeCategories, val]);
+  configRef.set({ incomeCategories: newList }, { merge: true }).then(() => { input.value = ""; });
 });
 document.getElementById("export-csv-btn").addEventListener("click", exportCSV);
 function csvField(val) {
@@ -1957,6 +1967,7 @@ let adminActiveTab = "users";
 async function loadAdminPanel() {
   renderAdminTabs();
   if (adminActiveTab === "users") await loadAdminUsers();
+  else if (adminActiveTab === "inquiries") await loadAdminInquiries();
   else if (adminActiveTab === "version") await loadAdminVersion();
   else await loadAdminCodes();
 }
@@ -1966,6 +1977,7 @@ function renderAdminTabs() {
     btn.classList.toggle("active", btn.dataset.adminTab === adminActiveTab);
   });
   document.getElementById("admin-users-panel").classList.toggle("hidden", adminActiveTab !== "users");
+  document.getElementById("admin-inquiries-panel").classList.toggle("hidden", adminActiveTab !== "inquiries");
   document.getElementById("admin-version-panel").classList.toggle("hidden", adminActiveTab !== "version");
   document.getElementById("admin-codes-panel").classList.toggle("hidden", adminActiveTab !== "codes");
 }
@@ -2142,6 +2154,7 @@ document.querySelectorAll(".admin-tab").forEach((btn) => {
     adminActiveTab = btn.dataset.adminTab;
     renderAdminTabs();
     if (adminActiveTab === "users") await loadAdminUsers();
+    else if (adminActiveTab === "inquiries") await loadAdminInquiries();
     else if (adminActiveTab === "version") await loadAdminVersion();
     else await loadAdminCodes();
   });
@@ -2151,6 +2164,122 @@ document.getElementById("admin-generate-code-btn").addEventListener("click", gen
 
 document.getElementById("admin-logout-btn").addEventListener("click", () => auth.signOut());
 document.getElementById("admin-refresh-btn").addEventListener("click", () => loadAdminPanel());
+
+/* ============================================================
+   CONTACT VIEW
+   ============================================================ */
+const inquiriesRef = db.collection("inquiries");
+let contactTopic = "תקלה";
+let contactImageData = null;
+
+function renderContactView() {
+  // Reset on open
+  document.getElementById("contact-success").classList.add("hidden");
+  document.getElementById("contact-send-btn").disabled = false;
+}
+
+document.querySelectorAll(".contact-topic-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    contactTopic = btn.dataset.topic;
+    document.querySelectorAll(".contact-topic-btn").forEach((b) => b.classList.toggle("active", b === btn));
+  });
+});
+
+document.getElementById("contact-image-btn").addEventListener("click", () => {
+  document.getElementById("contact-image-input").click();
+});
+document.getElementById("contact-image-input").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { alert("התמונה גדולה מדי (מקסימום 5MB)"); return; }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    contactImageData = ev.target.result;
+    const preview = document.getElementById("contact-image-preview");
+    preview.innerHTML = `<img src="${contactImageData}" style="width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-top:8px;">
+      <button onclick="clearContactImage()" class="link-btn" style="margin-top:4px;">הסר תמונה ✕</button>`;
+    preview.classList.remove("hidden");
+  };
+  reader.readAsDataURL(file);
+  e.target.value = "";
+});
+function clearContactImage() {
+  contactImageData = null;
+  document.getElementById("contact-image-preview").innerHTML = "";
+  document.getElementById("contact-image-preview").classList.add("hidden");
+}
+
+document.getElementById("contact-send-btn").addEventListener("click", async () => {
+  const message = document.getElementById("contact-message").value.trim();
+  if (!message) { alert("נא לכתוב הודעה"); return; }
+  const btn = document.getElementById("contact-send-btn");
+  btn.disabled = true; btn.textContent = "שולח...";
+  const user = auth.currentUser;
+  try {
+    await inquiriesRef.add({
+      topic: contactTopic,
+      message,
+      image: contactImageData || null,
+      kupahName: config.kupahName || "—",
+      partner1Name: p1(),
+      partner2Name: p2() || null,
+      userEmail: user ? user.email : "—",
+      uid: user ? user.uid : "—",
+      status: "new",
+      createdAt: firebase.firestore.Timestamp.now()
+    });
+    document.getElementById("contact-message").value = "";
+    clearContactImage();
+    document.getElementById("contact-success").classList.remove("hidden");
+    btn.textContent = "שליחת הפנייה 📤";
+  } catch(e) {
+    alert("שגיאה בשליחה: " + e.message);
+    btn.disabled = false; btn.textContent = "שליחת הפנייה 📤";
+  }
+});
+
+/* ── Admin: inquiries panel ── */
+async function loadAdminInquiries() {
+  const listEl = document.getElementById("admin-inquiries-list");
+  listEl.innerHTML = `<p class="admin-loading">טוען פניות...</p>`;
+  try {
+    const snap = await inquiriesRef.orderBy("createdAt", "desc").get();
+    if (snap.empty) { listEl.innerHTML = `<p class="admin-empty">אין פניות עדיין 🎉</p>`; return; }
+    const newCount = snap.docs.filter(d => d.data().status === "new").length;
+    listEl.innerHTML = (newCount > 0 ? `<p class="admin-new-badge">📬 ${newCount} פניות חדשות שלא טופלו</p>` : "") +
+      snap.docs.map((doc) => {
+        const d = doc.data();
+        const date = d.createdAt ? d.createdAt.toDate().toLocaleDateString("he-IL", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) : "—";
+        const isNew = d.status === "new";
+        return `<div class="admin-inquiry-row ${isNew ? "inquiry-new" : ""}">
+          <div class="inquiry-header">
+            <span class="inquiry-topic-badge">${escapeHtml(d.topic || "—")}</span>
+            <span class="inquiry-meta">${escapeHtml(d.kupahName || "—")} · ${escapeHtml(d.userEmail || "—")} · ${date}</span>
+            ${isNew ? `<span class="admin-status-badge badge-pending" style="margin-inline-start:auto">חדש</span>` : `<span class="admin-status-badge badge-active">טופל</span>`}
+          </div>
+          <p class="inquiry-message">${escapeHtml(d.message || "")}</p>
+          ${d.image ? `<img src="${d.image}" class="inquiry-image">` : ""}
+          <div class="inquiry-actions">
+            ${isNew ? `<button class="admin-action-btn" style="background:#E6F8EC;color:#1F8A4D;" onclick="markInquiryHandled('${doc.id}', this)">✅ סמן כטופל</button>` : ""}
+            <button class="admin-action-btn" style="background:#FCEAEF;color:#C94B6E;" onclick="deleteInquiry('${doc.id}', this)">🗑 מחק</button>
+          </div>
+        </div>`;
+      }).join("");
+  } catch(e) {
+    listEl.innerHTML = `<p class="admin-empty" style="color:red">שגיאה: ${e.message}</p>`;
+  }
+}
+async function markInquiryHandled(id, btn) {
+  btn.disabled = true;
+  await inquiriesRef.doc(id).update({ status: "handled" });
+  await loadAdminInquiries();
+}
+async function deleteInquiry(id, btn) {
+  if (!confirm("למחוק פנייה זו?")) return;
+  btn.disabled = true;
+  await inquiriesRef.doc(id).delete();
+  await loadAdminInquiries();
+}
 
 /* ============================================================
    15) Init

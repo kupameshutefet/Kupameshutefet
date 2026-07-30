@@ -456,6 +456,28 @@ body::after{
 .admin-stat-chip.blocked span{color:#C94B6E;}
 .badge-pending{background:#FBF0DC;color:#C2790E;}
 
+/* Contact view */
+.contact-topic-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;}
+.contact-topic-btn{
+  flex:1;min-width:80px;border:1.5px solid var(--border);background:var(--bg);
+  color:var(--muted);font-weight:700;font-size:13px;padding:9px 4px;
+  border-radius:var(--radius-sm);cursor:pointer;font-family:inherit;
+}
+.contact-topic-btn.active{background:var(--gradient);border-color:transparent;color:#fff;}
+.contact-image-preview{margin-top:6px;}
+.contact-success{color:var(--green);font-weight:700;font-size:14px;text-align:center;margin-top:12px;padding:12px;background:var(--green-tint);border-radius:var(--radius-sm);}
+
+/* Admin inquiries */
+.admin-new-badge{background:#FBF0DC;color:#C2790E;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:700;margin-bottom:12px;}
+.admin-inquiry-row{background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.admin-inquiry-row.inquiry-new{border-inline-start:3px solid var(--amber);}
+.inquiry-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+.inquiry-topic-badge{background:var(--blue-tint);color:var(--blue);font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;}
+.inquiry-meta{font-size:12px;color:var(--muted);}
+.inquiry-message{font-size:13.5px;line-height:1.6;margin:6px 0 10px;white-space:pre-wrap;}
+.inquiry-image{width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-bottom:10px;}
+.inquiry-actions{display:flex;gap:8px;}
+
 /* Admin version card */
 .admin-version-card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
 .admin-version-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F0F0F0;font-size:14px;}
