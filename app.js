@@ -76,12 +76,21 @@ function startFirestoreListeners() {
         budgets: data.budgets || {},
         accountBalances: data.accountBalances || {},
         savingsGoals: data.savingsGoals || [],
+        kupahName: data.kupahName || "הקופה המשותפת",
         maaserEnabled: data.maaserEnabled || false,
         isSelfEmployed: data.isSelfEmployed || false,
         partner1Name: data.partner1Name || "בן/בת זוג 1",
         partner2Name: data.partner2Name || null,
-        accountType: data.accountType || "couple"
+        accountType: data.accountType || "couple",
+        onboardingDone: data.onboardingDone || false
       };
+      // Update app title
+      const titleEl = document.getElementById("app-title");
+      if (titleEl) titleEl.textContent = config.kupahName || "הקופה המשותפת";
+      // Show onboarding for new users
+      if (!config.onboardingDone && document.getElementById("app") && !document.getElementById("app").classList.contains("app-hidden")) {
+        showOnboarding(config.kupahName);
+      }
       updatePartnerNamesInUI();
       populateCategorySelects();
       applyMaaserSettings();
@@ -189,39 +198,51 @@ function updatePartnerNamesInUI() {
 function showApp(user) {
   document.getElementById("auth-overlay").classList.add("hidden");
   document.getElementById("admin-overlay").classList.add("hidden");
+  document.getElementById("pending-overlay").classList.add("hidden");
+  document.getElementById("google-onboard-overlay").classList.add("hidden");
   document.getElementById("app").classList.remove("app-hidden");
   initFirestoreRefs(user.uid);
   startFirestoreListeners();
   const emailEl = document.getElementById("settings-user-email");
   if (emailEl) emailEl.textContent = user.email;
+  checkAppVersion();
 }
 
 auth.onAuthStateChanged(async (user) => {
   if (user) {
     if (user.email === ADMIN_EMAIL) {
-      // Admin → show admin panel, not the app
       document.getElementById("auth-overlay").classList.add("hidden");
       document.getElementById("app").classList.add("app-hidden");
+      document.getElementById("pending-overlay").classList.add("hidden");
       document.getElementById("admin-overlay").classList.remove("hidden");
       loadAdminPanel();
     } else {
-      // Check if user is blocked before showing the app
       try {
         const statusDoc = await userStatusRef.doc(user.uid).get();
-        if (statusDoc.exists && statusDoc.data().status === "blocked") {
+        const status = statusDoc.exists ? statusDoc.data().status : "pending";
+        if (status === "blocked") {
           await auth.signOut();
-          document.getElementById("auth-overlay").classList.remove("hidden");
           showAuthError("החשבון שלך חסום. לפרטים: " + ADMIN_EMAIL);
           return;
         }
-      } catch(e) { /* if no status doc yet, that's fine */ }
-      showApp(user);
+        if (status === "pending") {
+          document.getElementById("auth-overlay").classList.add("hidden");
+          document.getElementById("app").classList.add("app-hidden");
+          document.getElementById("pending-overlay").classList.remove("hidden");
+          return;
+        }
+        // status === "active" → show app
+        showApp(user);
+      } catch(e) {
+        showApp(user); // if can't read status, show app anyway
+      }
     }
   } else {
     stopFirestoreListeners();
     allExpenses=[]; allIncome=[]; allDebts=[]; allRecurring=[]; allEvents=[];
     document.getElementById("auth-overlay").classList.remove("hidden");
     document.getElementById("admin-overlay").classList.add("hidden");
+    document.getElementById("pending-overlay").classList.add("hidden");
     document.getElementById("app").classList.add("app-hidden");
   }
 });
@@ -301,57 +322,139 @@ document.getElementById("register-form").addEventListener("submit", (e) => {
   if (!p1Name) { showAuthError("נא להזין שם"); return; }
   if (registerMode === "couple" && !p2Name) { showAuthError("נא להזין שמות לשני בני הזוג"); return; }
   setAuthLoading(true);
-  const accessCode = document.getElementById("reg-access-code").value.trim().toUpperCase();
-  if (!accessCode) { showAuthError("נא להזין קוד גישה"); setAuthLoading(false); return; }
-
   auth.createUserWithEmailAndPassword(email, password).then(async (cred) => {
     const uid = cred.user.uid;
-    // Validate the access code (now we're authenticated, can read accessCodes)
-    const codeDoc = await accessCodesRef.doc(accessCode).get();
-    if (!codeDoc.exists || codeDoc.data().used) {
-      // Invalid or already used code → delete auth user and bail
-      await cred.user.delete().catch(()=>{});
-      await auth.signOut();
-      setAuthLoading(false);
-      showAuthError("קוד הגישה שגוי או כבר בשימוש. פנה ל-" + ADMIN_EMAIL);
-      return;
-    }
-    // Mark code as used
-    const batch = db.batch();
-    batch.update(accessCodesRef.doc(accessCode), { used: true, usedBy: email, usedAt: firebase.firestore.Timestamp.now() });
-    // Write user status for admin
-    batch.set(userStatusRef.doc(uid), {
-      email, uid,
-      partner1Name: p1Name, partner2Name: p2Name || null,
-      accountType: registerMode,
-      status: "active",
-      registeredAt: firebase.firestore.Timestamp.now(),
-      accessCode
-    });
-    // Write user config
-    const userDoc = db.collection("users").doc(uid);
-    const defaultCfg = {
-      partner1Name: p1Name,
-      partner2Name: p2Name || null,
-      accountType: registerMode,
-      categories: DEFAULT_CATEGORIES,
-      incomeCategories: DEFAULT_INCOME_CATEGORIES,
-      budgets: {},
-      accountBalances: registerMode === "couple"
-        ? { [p1Name]: 0, [p2Name]: 0, "מזומן": 0 }
-        : { [p1Name]: 0, "מזומן": 0 },
-      savingsGoals: [],
-      maaserEnabled: false,
-      isSelfEmployed: false
-    };
-    batch.set(userDoc.collection("meta").doc("config"), defaultCfg);
-    await batch.commit();
+    await writeNewUserData(uid, email, registerMode, p1Name, p2Name,
+      document.getElementById("reg-kupah-name").value.trim() || "הקופה המשותפת");
   }).catch((err) => {
     setAuthLoading(false);
     showAuthError(authErrorMessage(err.code), err.code);
   });
 });
 
+/* ── helpers shared between email and Google registration ── */
+const APP_VERSION = "1.0.0";
+let adminTestMode = false;
+let onboardSlide = 0;
+
+async function writeNewUserData(uid, email, accountType, p1Name, p2Name, kupahName) {
+  const batch = db.batch();
+  batch.set(userStatusRef.doc(uid), {
+    email, uid, partner1Name: p1Name, partner2Name: p2Name || null,
+    accountType, kupahName: kupahName || "הקופה המשותפת",
+    status: "pending", registeredAt: firebase.firestore.Timestamp.now()
+  });
+  const defaultCfg = {
+    partner1Name: p1Name, partner2Name: p2Name || null, accountType,
+    kupahName: kupahName || "הקופה המשותפת",
+    categories: DEFAULT_CATEGORIES, incomeCategories: DEFAULT_INCOME_CATEGORIES,
+    budgets: {},
+    accountBalances: accountType === "couple" ? { [p1Name]: 0, [p2Name]: 0, "מזומן": 0 } : { [p1Name]: 0, "מזומן": 0 },
+    savingsGoals: [], maaserEnabled: false, isSelfEmployed: false, onboardingDone: false
+  };
+  batch.set(db.collection("users").doc(uid).collection("meta").doc("config"), defaultCfg);
+  await batch.commit();
+}
+
+/* ── Admin button on auth screen ── */
+document.getElementById("admin-login-btn").addEventListener("click", () => {
+  // Switch to login tab and pre-fill admin email
+  document.querySelectorAll("[data-auth-tab]").forEach((b) => b.classList.toggle("active", b.dataset.authTab === "login"));
+  document.getElementById("login-form").classList.remove("hidden");
+  document.getElementById("register-form").classList.add("hidden");
+  document.getElementById("login-email").value = ADMIN_EMAIL;
+  document.getElementById("login-password").focus();
+  clearAuthError();
+});
+
+/* ── Pending logout ── */
+document.getElementById("pending-logout-btn").addEventListener("click", () => auth.signOut());
+
+/* ── Google sign-in ── */
+document.getElementById("google-signin-btn").addEventListener("click", async () => {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try {
+    const result = await auth.signInWithPopup(provider);
+    const user = result.user;
+    const isNew = result.additionalUserInfo && result.additionalUserInfo.isNewUser;
+    if (isNew) {
+      // Show name collection form
+      document.getElementById("auth-overlay").classList.add("hidden");
+      document.getElementById("google-onboard-overlay").classList.remove("hidden");
+      window._pendingGoogleUser = user;
+    }
+    // If existing user, onAuthStateChanged handles it
+  } catch(err) {
+    showAuthError(authErrorMessage(err.code), err.code);
+  }
+});
+
+/* Google onboard mode selector */
+let googleOnboardMode = "couple";
+document.querySelectorAll("[data-gmode]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    googleOnboardMode = btn.dataset.gmode;
+    document.querySelectorAll("[data-gmode]").forEach((b) => b.classList.toggle("active", b.dataset.gmode === googleOnboardMode));
+    const isSolo = googleOnboardMode === "solo";
+    document.getElementById("gonboard-p2-field").style.display = isSolo ? "none" : "";
+    document.getElementById("gonboard-partner2").required = !isSolo;
+    document.getElementById("gonboard-p1-label").textContent = isSolo ? "השם שלך 👤" : "שם בן/בת הזוג הראשון/ה";
+  });
+});
+document.getElementById("google-onboard-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const user = window._pendingGoogleUser;
+  if (!user) return;
+  const p1Name = document.getElementById("gonboard-partner1").value.trim();
+  const p2Name = googleOnboardMode === "couple" ? document.getElementById("gonboard-partner2").value.trim() : null;
+  const kupahName = document.getElementById("gonboard-kupah").value.trim() || "הקופה המשותפת";
+  if (!p1Name) return;
+  await writeNewUserData(user.uid, user.email, googleOnboardMode, p1Name, p2Name, kupahName);
+  document.getElementById("google-onboard-overlay").classList.add("hidden");
+  // onAuthStateChanged will now see the pending status
+});
+
+/* ── Onboarding slides ── */
+function showOnboarding(kupahName) {
+  const title = document.getElementById("onboard-welcome-title");
+  if (title) title.textContent = `ברוכים הבאים ל${kupahName || "הקופה שלכם"}! 🎉`;
+  document.getElementById("onboarding-overlay").classList.remove("hidden");
+  onboardSlide = 0;
+  updateOnboardSlide();
+}
+function updateOnboardSlide() {
+  document.querySelectorAll(".onboard-slide").forEach((s, i) => s.classList.toggle("active", i === onboardSlide));
+  document.querySelectorAll(".onboard-dot").forEach((d, i) => d.classList.toggle("active", i === onboardSlide));
+  const btn = document.getElementById("onboard-next-btn");
+  btn.textContent = onboardSlide === 3 ? "בואו נתחיל! 🚀" : "הבא ›";
+}
+function finishOnboarding() {
+  document.getElementById("onboarding-overlay").classList.add("hidden");
+  if (configRef) configRef.set({ onboardingDone: true }, { merge: true });
+}
+document.getElementById("onboard-next-btn").addEventListener("click", () => {
+  if (onboardSlide < 3) { onboardSlide++; updateOnboardSlide(); }
+  else finishOnboarding();
+});
+document.getElementById("onboard-skip-btn").addEventListener("click", finishOnboarding);
+
+/* ── Version check ── */
+async function checkAppVersion() {
+  try {
+    const doc = await db.collection("appMeta").doc("version").get();
+    if (!doc.exists) return;
+    const { current, message } = doc.data();
+    document.getElementById("admin-code-version") && (document.getElementById("admin-code-version").textContent = APP_VERSION);
+    document.getElementById("admin-live-version") && (document.getElementById("admin-live-version").textContent = current || "—");
+    if (current && current !== APP_VERSION) {
+      const banner = document.getElementById("version-banner");
+      const msgEl = document.getElementById("version-banner-msg");
+      if (banner) { msgEl.textContent = `🔔 ${message || "יש גרסה חדשה — רענן לקבלת העדכון"}`;  banner.classList.remove("hidden"); }
+    }
+  } catch(e) { /* silent */ }
+}
+
+/* ── Forgot password ── */
 // Forgot password
 document.getElementById("forgot-password-btn").addEventListener("click", () => {
   const email = document.getElementById("login-email").value.trim();
@@ -1854,6 +1957,7 @@ let adminActiveTab = "users";
 async function loadAdminPanel() {
   renderAdminTabs();
   if (adminActiveTab === "users") await loadAdminUsers();
+  else if (adminActiveTab === "version") await loadAdminVersion();
   else await loadAdminCodes();
 }
 
@@ -1862,6 +1966,7 @@ function renderAdminTabs() {
     btn.classList.toggle("active", btn.dataset.adminTab === adminActiveTab);
   });
   document.getElementById("admin-users-panel").classList.toggle("hidden", adminActiveTab !== "users");
+  document.getElementById("admin-version-panel").classList.toggle("hidden", adminActiveTab !== "version");
   document.getElementById("admin-codes-panel").classList.toggle("hidden", adminActiveTab !== "codes");
 }
 
@@ -1870,24 +1975,35 @@ async function loadAdminUsers() {
   listEl.innerHTML = `<p class="admin-loading">טוען משתמשים...</p>`;
   try {
     const snap = await userStatusRef.orderBy("registeredAt", "desc").get();
+    // Update stats
+    let pending=0, active=0, blocked=0;
+    snap.docs.forEach(d => { const s=d.data().status; if(s==="pending")pending++; else if(s==="active")active++; else if(s==="blocked")blocked++; });
+    document.getElementById("astat-total").textContent = snap.size;
+    document.getElementById("astat-pending").textContent = pending;
+    document.getElementById("astat-active").textContent = active;
+    document.getElementById("astat-blocked").textContent = blocked;
+
     if (snap.empty) { listEl.innerHTML = `<p class="admin-empty">אין משתמשים רשומים עדיין</p>`; return; }
     listEl.innerHTML = snap.docs.map((doc) => {
       const d = doc.data();
       const date = d.registeredAt ? d.registeredAt.toDate().toLocaleDateString("he-IL") : "—";
       const names = d.accountType === "solo" ? d.partner1Name : `${d.partner1Name} + ${d.partner2Name || ""}`;
-      const modeLabel = d.accountType === "solo" ? "יחיד/ה" : "זוג";
-      const isBlocked = d.status === "blocked";
+      const modeLabel = d.accountType === "solo" ? "🧍" : "💑";
+      const status = d.status || "pending";
+      const isPending = status === "pending";
+      const isBlocked = status === "blocked";
+      const statusLabel = isPending ? "ממתין לאישור" : isBlocked ? "חסום" : "פעיל";
+      const badgeClass = isPending ? "badge-pending" : isBlocked ? "badge-blocked" : "badge-active";
       return `<div class="admin-user-row">
         <div class="admin-user-info">
-          <div class="admin-user-email">${escapeHtml(d.email || "—")}</div>
-          <div class="admin-user-meta">${escapeHtml(names)} · ${modeLabel} · נרשם ${date}</div>
-          <div class="admin-user-meta">קוד: ${escapeHtml(d.accessCode || "—")}</div>
+          <div class="admin-user-email">${escapeHtml(d.email||"—")}</div>
+          <div class="admin-user-meta">${modeLabel} ${escapeHtml(names)} · ${escapeHtml(d.kupahName||"")} · ${date}</div>
         </div>
-        <div>
-          <span class="admin-status-badge ${isBlocked ? "badge-blocked" : "badge-active"}">${isBlocked ? "חסום" : "פעיל"}</span>
-          <button class="admin-action-btn" onclick="toggleUserStatus('${doc.id}', '${isBlocked ? "active" : "blocked"}', this)">
-            ${isBlocked ? "🔓 פתח" : "🔒 חסום"}
-          </button>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+          <span class="admin-status-badge ${badgeClass}">${statusLabel}</span>
+          ${isPending ? `<button class="admin-action-btn" style="background:#E6F8EC;color:#1F8A4D;" onclick="setUserStatus('${doc.id}','active',this)">✅ אשר</button>` : ""}
+          ${!isPending && !isBlocked ? `<button class="admin-action-btn" onclick="setUserStatus('${doc.id}','blocked',this)">🔒 חסום</button>` : ""}
+          ${isBlocked ? `<button class="admin-action-btn" onclick="setUserStatus('${doc.id}','active',this)">🔓 פתח</button>` : ""}
         </div>
       </div>`;
     }).join("");
@@ -1896,13 +2012,79 @@ async function loadAdminUsers() {
   }
 }
 
-async function toggleUserStatus(uid, newStatus, btn) {
+async function setUserStatus(uid, newStatus, btn) {
   btn.disabled = true;
   try {
     await userStatusRef.doc(uid).update({ status: newStatus });
     await loadAdminUsers();
   } catch(e) { btn.disabled = false; alert("שגיאה: " + e.message); }
 }
+
+// Keep old name for compatibility
+const toggleUserStatus = setUserStatus;
+
+async function loadAdminVersion() {
+  document.getElementById("admin-code-version").textContent = APP_VERSION;
+  try {
+    const doc = await db.collection("appMeta").doc("version").get();
+    document.getElementById("admin-live-version").textContent = doc.exists ? (doc.data().current || "—") : "לא הוגדר";
+    if (doc.exists && doc.data().message) document.getElementById("admin-version-msg").value = doc.data().message;
+  } catch(e) { document.getElementById("admin-live-version").textContent = "שגיאה"; }
+}
+
+document.getElementById("admin-push-version-btn").addEventListener("click", async () => {
+  const v = document.getElementById("admin-new-version").value.trim();
+  const msg = document.getElementById("admin-version-msg").value.trim() || "יש עדכון חדש! רענן את הדף.";
+  if (!v) { alert("הזן מספר גרסה"); return; }
+  await db.collection("appMeta").doc("version").set({ current: v, message: msg });
+  showToast("✅ גרסה פורסמה — כל המשתמשים יראו בנר");
+  await loadAdminVersion();
+});
+
+/* ── Test mode ── */
+document.getElementById("admin-test-mode-btn").addEventListener("click", async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+  adminTestMode = true;
+  const testUid = user.uid + "_test";
+  // Init Firestore refs to the test path
+  const testDoc = db.collection("users").doc(testUid);
+  expensesRef = testDoc.collection("expenses");
+  incomeRef   = testDoc.collection("income");
+  debtsRef    = testDoc.collection("debts");
+  recurringRef = testDoc.collection("recurringExpenses");
+  eventsRef   = testDoc.collection("events");
+  configRef   = testDoc.collection("meta").doc("config");
+  // If no test config yet, create a default one
+  const testCfg = await configRef.get();
+  if (!testCfg.exists) {
+    await configRef.set({
+      partner1Name: "יוסף", partner2Name: "אגם", accountType: "couple",
+      kupahName: "קופת בדיקה 🧪",
+      categories: DEFAULT_CATEGORIES, incomeCategories: DEFAULT_INCOME_CATEGORIES,
+      budgets: {}, accountBalances: { "יוסף": 5000, "אגם": 3000, "מזומן": 500 },
+      savingsGoals: [], maaserEnabled: false, isSelfEmployed: false, onboardingDone: true
+    });
+  }
+  startFirestoreListeners();
+  document.getElementById("admin-overlay").classList.add("hidden");
+  document.getElementById("app").classList.remove("app-hidden");
+  // Show test mode banner
+  const banner = document.getElementById("version-banner");
+  const msg = document.getElementById("version-banner-msg");
+  msg.textContent = "🧪 מצב בדיקה — הנתונים כאן לא אמיתיים";
+  banner.classList.remove("hidden");
+  // Override the "reload" button to go back to admin
+  banner.querySelector("button").textContent = "חזור לאדמין";
+  banner.querySelector("button").onclick = () => {
+    adminTestMode = false;
+    stopFirestoreListeners();
+    banner.classList.add("hidden");
+    document.getElementById("app").classList.add("app-hidden");
+    document.getElementById("admin-overlay").classList.remove("hidden");
+    loadAdminPanel();
+  };
+});
 
 async function loadAdminCodes() {
   const listEl = document.getElementById("admin-codes-list");
@@ -1960,6 +2142,7 @@ document.querySelectorAll(".admin-tab").forEach((btn) => {
     adminActiveTab = btn.dataset.adminTab;
     renderAdminTabs();
     if (adminActiveTab === "users") await loadAdminUsers();
+    else if (adminActiveTab === "version") await loadAdminVersion();
     else await loadAdminCodes();
   });
 });

@@ -12,7 +12,7 @@
 <meta name="theme-color" content="#5AA89E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Rubik:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 
@@ -41,7 +41,7 @@
   </div>
 </div>
 
-<!-- Auth overlay — shown until user logs in -->
+<!-- Auth overlay -->
 <div id="auth-overlay" class="auth-overlay">
   <div class="auth-card">
     <div class="auth-brand">
@@ -49,16 +49,18 @@
       <h1 class="auth-title">הקופה המשותפת</h1>
       <p class="auth-tagline">ניהול כספים חכם</p>
     </div>
-
     <button type="button" class="pwa-hint-btn" onclick="document.getElementById('pwa-modal-overlay').classList.remove('hidden')">
       📲 איך להוסיף למסך הבית?
     </button>
-
     <div class="tab-switch auth-tabs">
       <button class="tab-btn active" data-auth-tab="login">כניסה</button>
       <button class="tab-btn" data-auth-tab="register">הרשמה</button>
     </div>
-
+    <button type="button" id="google-signin-btn" class="google-btn">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+      כניסה עם Google
+    </button>
+    <div class="auth-divider"><span>או</span></div>
     <form id="login-form">
       <label class="field">
         <span>אימייל</span>
@@ -71,14 +73,11 @@
       <button type="submit" class="submit-btn">כניסה</button>
       <button type="button" id="forgot-password-btn" class="link-btn auth-forgot">שכחתי סיסמא</button>
     </form>
-
     <form id="register-form" class="hidden">
-      <!-- Mode selector: couple vs solo -->
       <div class="account-mode-row">
         <button type="button" class="mode-btn active" data-mode="couple">💑 זוג</button>
         <button type="button" class="mode-btn" data-mode="solo">🧍 יחיד/ה</button>
       </div>
-
       <label class="field" id="reg-p1-field">
         <span id="reg-p1-label">שם בן/בת הזוג הראשון/ה 👤</span>
         <input type="text" id="reg-partner1" required placeholder="לדוגמה: יוסף, דוד, שרה">
@@ -88,6 +87,10 @@
         <input type="text" id="reg-partner2" placeholder="לדוגמה: אגם, מרים, נועה">
       </label>
       <label class="field">
+        <span>שם הקופה שלכם 🏦</span>
+        <input type="text" id="reg-kupah-name" placeholder='לדוגמה: "קופת כהן"' maxlength="30">
+      </label>
+      <label class="field">
         <span>אימייל</span>
         <input type="email" id="reg-email" required autocomplete="email" placeholder="האימייל שלכם">
       </label>
@@ -95,15 +98,86 @@
         <span>סיסמא (לפחות 6 תווים)</span>
         <input type="password" id="reg-password" required minlength="6" autocomplete="new-password" placeholder="••••••">
       </label>
-      <label class="field">
-        <span>קוד גישה 🔑</span>
-        <input type="text" id="reg-access-code" placeholder="KUPA-XXXXXX" autocomplete="off" style="text-transform:uppercase;letter-spacing:2px;font-weight:700;">
-      </label>
       <button type="submit" class="submit-btn" id="reg-submit-btn">יצירת הקופה שלנו 🎉</button>
     </form>
-
     <p id="auth-error" class="auth-error hidden"></p>
     <p id="auth-loading" class="auth-loading hidden">טוען...</p>
+    <button type="button" id="admin-login-btn" class="admin-login-link">🔐 כניסת מנהל</button>
+  </div>
+</div>
+
+<!-- Pending approval screen -->
+<div id="pending-overlay" class="pending-overlay hidden">
+  <div class="pending-card">
+    <div class="pending-icon">📬</div>
+    <h2>בקשת ההרשמה נשלחה!</h2>
+    <p class="pending-text">קיבלנו את פרטיכם ואנחנו בבדיקה. נודיע לכם בהקדם כשהחשבון מאושר.</p>
+    <p class="pending-email">שאלות? <a href="mailto:yosetre@icloud.com">yosetre@icloud.com</a></p>
+    <button id="pending-logout-btn" class="submit-btn" style="margin-top:16px">חזרה למסך הכניסה</button>
+  </div>
+</div>
+
+<!-- Google new user name collection -->
+<div id="google-onboard-overlay" class="auth-overlay hidden" style="z-index:450;">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <img src="icon-180.png" class="auth-logo" alt="">
+      <h2 class="auth-title" style="font-size:18px;">עוד שלב אחד 👋</h2>
+      <p class="auth-tagline">ספרו לנו קצת על עצמכם</p>
+    </div>
+    <form id="google-onboard-form">
+      <div class="account-mode-row">
+        <button type="button" class="mode-btn active" data-gmode="couple">💑 זוג</button>
+        <button type="button" class="mode-btn" data-gmode="solo">🧍 יחיד/ה</button>
+      </div>
+      <label class="field" id="gonboard-p1-field">
+        <span id="gonboard-p1-label">שם בן/בת הזוג הראשון/ה</span>
+        <input type="text" id="gonboard-partner1" required placeholder="לדוגמה: יוסף">
+      </label>
+      <label class="field" id="gonboard-p2-field">
+        <span>שם בן/בת הזוג השני/ה</span>
+        <input type="text" id="gonboard-partner2" placeholder="לדוגמה: אגם">
+      </label>
+      <label class="field">
+        <span>שם הקופה שלכם 🏦</span>
+        <input type="text" id="gonboard-kupah" placeholder='לדוגמה: "קופת כהן"' maxlength="30">
+      </label>
+      <button type="submit" class="submit-btn">בואו נתחיל! 🚀</button>
+    </form>
+  </div>
+</div>
+
+<!-- Onboarding slides -->
+<div id="onboarding-overlay" class="onboarding-overlay hidden">
+  <div class="onboard-card">
+    <button class="onboard-skip" id="onboard-skip-btn">דלג</button>
+    <div id="onboard-slides">
+      <div class="onboard-slide active" data-slide="0">
+        <div class="onboard-emoji">🎉</div>
+        <h2 id="onboard-welcome-title">ברוכים הבאים!</h2>
+        <p>הקופה שלכם מוכנה. נסייר יחד בפיצ'רים הראשיים — 30 שניות בלבד.</p>
+      </div>
+      <div class="onboard-slide" data-slide="1">
+        <div class="onboard-emoji">💸</div>
+        <h2>הוספת הוצאות</h2>
+        <p>לחצו על <strong>+</strong> בתחתית המסך. בחרו קטגוריה, סכום ומי שילם — זהו!</p>
+      </div>
+      <div class="onboard-slide" data-slide="2">
+        <div class="onboard-emoji">📊</div>
+        <h2>דוחות וניתוחים</h2>
+        <p>פילוח לפי קטגוריה, השוואה לחודש קודם, ויתרות עדכניות — הכל אוטומטי.</p>
+      </div>
+      <div class="onboard-slide" data-slide="3">
+        <div class="onboard-emoji">📲</div>
+        <h2>הוסיפו למסך הבית</h2>
+        <p>ספארי ← כפתור שיתוף ← "הוסף למסך הבית" — חוויה של אפליקציה מלאה.</p>
+      </div>
+    </div>
+    <div class="onboard-dots" id="onboard-dots">
+      <span class="onboard-dot active"></span><span class="onboard-dot"></span>
+      <span class="onboard-dot"></span><span class="onboard-dot"></span>
+    </div>
+    <button class="submit-btn" id="onboard-next-btn">הבא ›</button>
   </div>
 </div>
 
@@ -118,14 +192,24 @@
       </div>
     </div>
     <div style="display:flex;gap:8px;">
+      <button class="admin-icon-btn" id="admin-test-mode-btn" title="מצב בדיקה">🧪 בדיקה</button>
       <button class="admin-icon-btn" id="admin-refresh-btn" title="רענן">↻</button>
       <button class="admin-icon-btn" id="admin-logout-btn">יציאה</button>
     </div>
   </div>
 
+  <!-- Stats bar -->
+  <div class="admin-stats-bar" id="admin-stats-bar">
+    <div class="admin-stat-chip"><span id="astat-total">0</span><small>רשומים</small></div>
+    <div class="admin-stat-chip pending"><span id="astat-pending">0</span><small>ממתינים</small></div>
+    <div class="admin-stat-chip active"><span id="astat-active">0</span><small>פעילים</small></div>
+    <div class="admin-stat-chip blocked"><span id="astat-blocked">0</span><small>חסומים</small></div>
+  </div>
+
   <div class="admin-tabs-bar">
     <button class="admin-tab active" data-admin-tab="users">👥 משתמשים</button>
-    <button class="admin-tab" data-admin-tab="codes">🔑 קודי גישה</button>
+    <button class="admin-tab" data-admin-tab="version">🔔 גרסה</button>
+    <button class="admin-tab" data-admin-tab="codes">🔑 קודים</button>
   </div>
 
   <!-- Users panel -->
@@ -133,24 +217,54 @@
     <div id="admin-users-list"><p class="admin-loading">טוען...</p></div>
   </div>
 
+  <!-- Version panel -->
+  <div id="admin-version-panel" class="admin-panel hidden">
+    <div class="admin-version-card">
+      <div class="admin-version-row">
+        <span>גרסה בקוד</span>
+        <strong id="admin-code-version">—</strong>
+      </div>
+      <div class="admin-version-row">
+        <span>גרסה ב-Firestore</span>
+        <strong id="admin-live-version">—</strong>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">
+      <label class="field">
+        <span>עדכן גרסה ל</span>
+        <input type="text" id="admin-new-version" placeholder="לדוגמה: 1.0.5">
+      </label>
+      <label class="field">
+        <span>הודעה למשתמשים</span>
+        <input type="text" id="admin-version-msg" placeholder="לדוגמה: שיפורים ותיקוני באגים ⚡">
+      </label>
+      <button id="admin-push-version-btn" class="admin-generate-btn">פרסם עדכון → כל המשתמשים יראו בנר</button>
+    </div>
+  </div>
+
   <!-- Codes panel -->
   <div id="admin-codes-panel" class="admin-panel hidden">
     <div class="admin-generate-row">
       <input type="text" id="admin-code-note" class="admin-code-note-input" placeholder="הערה (לדוגמה: דוד ורחל - שולמו)">
-      <button id="admin-generate-code-btn" class="admin-generate-btn">+ צור קוד חדש</button>
+      <button id="admin-generate-code-btn" class="admin-generate-btn">+ צור קוד</button>
     </div>
     <div id="admin-codes-list"><p class="admin-loading">טוען...</p></div>
   </div>
 </div>
 
 <div id="app">
+  <!-- Version update banner -->
+  <div id="version-banner" class="version-banner hidden">
+    <span id="version-banner-msg">🔔 יש גרסה חדשה!</span>
+    <button onclick="location.reload(true)" class="version-banner-btn">רענן</button>
+    <button onclick="document.getElementById('version-banner').classList.add('hidden')" class="version-banner-close">✕</button>
+  </div>
 
   <!-- Top bar -->
   <header class="topbar">
     <button id="open-menu" class="hamburger" aria-label="תפריט">☰</button>
     <div class="brand">
       <img src="icon-180.png" class="brand-icon-img" alt="">
-      <span class="brand-title">הקופה המשותפת</span>
+      <span class="brand-title" id="app-title">הקופה המשותפת</span>
       <span class="brand-sub" id="brand-sub">טוען...</span>
     </div>
     <div class="avatars">
@@ -934,6 +1048,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
