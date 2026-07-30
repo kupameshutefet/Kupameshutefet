@@ -1049,5 +1049,39 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="app.js?v=5"></script>
+
+<!-- Service Worker registration -->
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js', { scope: './' }).then(reg => {
+    // Listen for a new SW being installed
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          // New version ready — show banner
+          const banner = document.getElementById('version-banner');
+          const msg   = document.getElementById('version-banner-msg');
+          if (banner && msg) {
+            msg.textContent = '🔔 יש גרסה חדשה של האפליקציה!';
+            banner.classList.remove('hidden');
+            // Override the refresh button to activate the new SW
+            banner.querySelector('button').onclick = () => {
+              newWorker.postMessage('SKIP_WAITING');
+              window.location.reload();
+            };
+          }
+        }
+      });
+    });
+  }).catch(err => console.warn('SW registration failed:', err));
+
+  // When a new SW takes over, reload
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!document.getElementById('version-banner')?.classList.contains('hidden')) return;
+    window.location.reload();
+  });
+}
+</script>
 </body>
 </html>
