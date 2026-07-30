@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>הקופה המשותפת</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="הקופה המשותפת">
+<meta name="theme-color" content="#5AA89E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Rubik:wght@600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=3">
+</head>
+<body>
+
+<!-- How to add to home screen modal -->
+<div id="pwa-modal-overlay" class="modal-overlay hidden" style="z-index:600;">
+  <div class="modal pwa-modal">
+    <div class="modal-head">
+      <h3>הוספה למסך הבית 📱</h3>
+      <button onclick="document.getElementById('pwa-modal-overlay').classList.add('hidden')" class="modal-close">✕</button>
+    </div>
+    <div class="pwa-section">
+      <div class="pwa-os-title">🍎 iPhone / iPad (ספארי בלבד)</div>
+      <div class="pwa-step"><span class="pwa-num">1</span><span>פתח את האתר בספארי — לא בכרום או פיירפוקס</span></div>
+      <div class="pwa-step"><span class="pwa-num">2</span><span>לחץ על כפתור השיתוף <strong>□↑</strong> בסרגל התחתון</span></div>
+      <div class="pwa-step"><span class="pwa-num">3</span><span>גלול למטה ← לחץ <strong>"Add to Home Screen"</strong> / <strong>"הוסף למסך הבית"</strong></span></div>
+      <div class="pwa-step"><span class="pwa-num">4</span><span>בחר שם ← לחץ <strong>Add / הוסף</strong></span></div>
+    </div>
+    <div class="pwa-section">
+      <div class="pwa-os-title">🤖 אנדרואיד (כרום)</div>
+      <div class="pwa-step"><span class="pwa-num">1</span><span>פתח את האתר בכרום</span></div>
+      <div class="pwa-step"><span class="pwa-num">2</span><span>לחץ על שלוש הנקודות <strong>⋮</strong> בפינה הימנית העליונה</span></div>
+      <div class="pwa-step"><span class="pwa-num">3</span><span>לחץ <strong>"Add to Home screen"</strong> / <strong>"הוסף למסך הבית"</strong></span></div>
+      <div class="pwa-step"><span class="pwa-num">4</span><span>לחץ <strong>Add / הוסף</strong></span></div>
+    </div>
+    <p class="pwa-note">לאחר ההוספה האפליקציה תיפתח במסך מלא בלי סרגל הדפדפן, בדיוק כמו אפליקציה רגילה.</p>
+  </div>
+</div>
+
+<!-- Auth overlay — shown until user logs in -->
+<div id="auth-overlay" class="auth-overlay">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <img src="icon-180.png" class="auth-logo" alt="">
+      <h1 class="auth-title">הקופה המשותפת</h1>
+      <p class="auth-tagline">ניהול כספים חכם</p>
+    </div>
+
+    <button type="button" class="pwa-hint-btn" onclick="document.getElementById('pwa-modal-overlay').classList.remove('hidden')">
+      📲 איך להוסיף למסך הבית?
+    </button>
+
+    <div class="tab-switch auth-tabs">
+      <button class="tab-btn active" data-auth-tab="login">כניסה</button>
+      <button class="tab-btn" data-auth-tab="register">הרשמה</button>
+    </div>
+
+    <form id="login-form">
+      <label class="field">
+        <span>אימייל</span>
+        <input type="email" id="login-email" required autocomplete="email" placeholder="האימייל שלכם">
+      </label>
+      <label class="field">
+        <span>סיסמא</span>
+        <input type="password" id="login-password" required autocomplete="current-password" placeholder="••••••">
+      </label>
+      <button type="submit" class="submit-btn">כניסה</button>
+      <button type="button" id="forgot-password-btn" class="link-btn auth-forgot">שכחתי סיסמא</button>
+    </form>
+
+    <form id="register-form" class="hidden">
+      <!-- Mode selector: couple vs solo -->
+      <div class="account-mode-row">
+        <button type="button" class="mode-btn active" data-mode="couple">💑 זוג</button>
+        <button type="button" class="mode-btn" data-mode="solo">🧍 יחיד/ה</button>
+      </div>
+
+      <label class="field" id="reg-p1-field">
+        <span id="reg-p1-label">שם בן/בת הזוג הראשון/ה 👤</span>
+        <input type="text" id="reg-partner1" required placeholder="לדוגמה: יוסף, דוד, שרה">
+      </label>
+      <label class="field" id="reg-p2-field">
+        <span>שם בן/בת הזוג השני/ה 👩</span>
+        <input type="text" id="reg-partner2" placeholder="לדוגמה: אגם, מרים, נועה">
+      </label>
+      <label class="field">
+        <span>אימייל</span>
+        <input type="email" id="reg-email" required autocomplete="email" placeholder="האימייל שלכם">
+      </label>
+      <label class="field">
+        <span>סיסמא (לפחות 6 תווים)</span>
+        <input type="password" id="reg-password" required minlength="6" autocomplete="new-password" placeholder="••••••">
+      </label>
+      <button type="submit" class="submit-btn" id="reg-submit-btn">יצירת הקופה שלנו 🎉</button>
+    </form>
+
+    <p id="auth-error" class="auth-error hidden"></p>
+    <p id="auth-loading" class="auth-loading hidden">טוען...</p>
+  </div>
+</div>
+
+<div id="app">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <button id="open-menu" class="hamburger" aria-label="תפריט">☰</button>
+    <div class="brand">
+      <img src="icon-180.png" class="brand-icon-img" alt="">
+      <span class="brand-title">הקופה המשותפת</span>
+      <span class="brand-sub" id="brand-sub">טוען...</span>
+    </div>
+    <div class="avatars">
+      <div class="avatar avatar-yosef" id="avatar-p1">?</div>
+      <div class="avatar avatar-agam" id="avatar-p2" data-couple-only>?</div>
+    </div>
+  </header>
+
+  <!-- ============== DASHBOARD VIEW ============== -->
+  <section class="view" data-view="dashboard">
+
+    <div class="month-bar">
+      <button id="prev-month" class="month-arrow" aria-label="חודש קודם">‹</button>
+      <div class="month-pill">
+        <span class="month-icon">📅</span>
+        <div class="month-text">
+          <span id="month-label">יוני 2026</span>
+          <span id="month-sub" class="month-sub">0 הוצאות</span>
+        </div>
+      </div>
+      <button id="next-month" class="month-arrow" aria-label="חודש הבא">›</button>
+    </div>
+
+    <div class="hero-card">
+      <div class="hero-top">
+        <span class="hero-eyebrow">סך ההוצאות המשותפות החודש</span>
+        <span class="hero-badge" id="hero-badge">פעיל</span>
+      </div>
+      <div class="hero-figure" id="hero-figure">0 ₪</div>
+      <div class="hero-sub" id="hero-sub">טוען נתונים...</div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card tint-blue">
+        <span class="stat-label">סך הוצאות</span>
+        <span class="stat-value" id="stat-total">0₪</span>
+      </div>
+      <div class="stat-card tint-green">
+        <span class="stat-label">סך הכנסות</span>
+        <span class="stat-value" id="stat-income">0₪</span>
+      </div>
+      <div class="stat-card tint-teal">
+        <span class="stat-label" id="stat-label-p1">בן/בת זוג 1</span>
+        <span class="stat-value" id="stat-yosef">0₪</span>
+      </div>
+      <div class="stat-card tint-rose">
+        <span class="stat-label" id="stat-label-p2" data-couple-only>בן/בת זוג 2</span>
+        <span class="stat-value" id="stat-agam">0₪</span>
+      </div>
+    </div>
+
+    <div class="panel-head snapshot-head"><h2>תמונת מצב כללית</h2></div>
+    <div class="stat-grid">
+      <div class="stat-card tint-purple">
+        <span class="stat-label">יתרת קופה כוללת</span>
+        <span class="stat-value" id="stat-balance">0₪</span>
+      </div>
+      <div class="stat-card tint-amber">
+        <span class="stat-label">נחסך עד כה</span>
+        <span class="stat-value" id="stat-saved">0₪</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>לפי קטגוריה</h2></div>
+      <div id="category-bars" class="category-bars">
+        <p class="empty-hint">אין עדיין הוצאות החודש</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head panel-head-row">
+        <h2>הוצאות אחרונות</h2>
+        <button class="link-btn" data-goto="expenses">לכל ההוצאות ←</button>
+      </div>
+      <div id="recent-expense-list" class="expense-list">
+        <p class="empty-hint">כשתוסיפו הוצאה היא תופיע כאן</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== EXPENSES VIEW ============== -->
+  <section class="view hidden" data-view="expenses">
+    <div class="month-bar">
+      <button id="expenses-prev-month" class="month-arrow" aria-label="חודש קודם">‹</button>
+      <div class="month-pill">
+        <span class="month-icon">📅</span>
+        <div class="month-text">
+          <span id="expenses-month-label">—</span>
+          <span id="expenses-month-sub" class="month-sub">0 הוצאות</span>
+        </div>
+      </div>
+      <button id="expenses-next-month" class="month-arrow" aria-label="חודש הבא">›</button>
+    </div>
+    <div class="panel">
+      <div class="panel-head panel-head-row">
+        <h2>הוצאות</h2>
+        <button type="button" id="expenses-show-all" class="chip-toggle">כל הזמנים</button>
+      </div>
+      <div class="search-row">
+        <input type="text" id="search-input" placeholder="חיפוש לפי תיאור...">
+        <select id="filter-category"><option value="">כל הקטגוריות</option></select>
+      </div>
+    </div>
+    <div class="panel">
+      <div id="full-expense-list" class="expense-list">
+        <p class="empty-hint">אין הוצאות תואמות</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== INCOME VIEW ============== -->
+  <section class="view hidden" data-view="income">
+    <div class="month-bar">
+      <button id="income-prev-month" class="month-arrow" aria-label="חודש קודם">‹</button>
+      <div class="month-pill">
+        <span class="month-icon">📅</span>
+        <div class="month-text">
+          <span id="income-month-label">—</span>
+          <span id="income-month-sub" class="month-sub">0 הכנסות</span>
+        </div>
+      </div>
+      <button id="income-next-month" class="month-arrow" aria-label="חודש הבא">›</button>
+    </div>
+    <div class="panel">
+      <div class="panel-head panel-head-row">
+        <h2>הכנסות</h2>
+        <button type="button" id="income-show-all" class="chip-toggle">כל הזמנים</button>
+      </div>
+      <div class="search-row">
+        <input type="text" id="income-search-input" placeholder="חיפוש לפי תיאור...">
+        <select id="income-filter-category"><option value="">כל הקטגוריות</option></select>
+      </div>
+    </div>
+    <div class="panel">
+      <div id="full-income-list" class="expense-list">
+        <p class="empty-hint">אין הכנסות תואמות</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== FINANCES VIEW (balances + savings) ============== -->
+  <section class="view hidden" data-view="finances">
+    <div class="hero-card finances-hero">
+      <div class="hero-top">
+        <span class="hero-eyebrow">כל הכסף שלנו, ביחד</span>
+      </div>
+      <div class="hero-figure" id="grand-total-figure">0 ₪</div>
+      <div class="hero-sub" id="finances-hero-sub">יוסף + אגם + מזומן + חיסכון, הכל ביחד</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>יתרות נוכחיות</h2></div>
+      <p class="panel-desc">היתרה מחושבת אוטומטית ונשמרת לאורך כל הזמן (לא מתאפסת בתחילת חודש). אפשר בכל רגע "לאפס" ולקבוע יתרה מדויקת - פשוט הקלידו את הסכום האמיתי ולחצו שמירה.</p>
+      <div id="balance-cards" class="balance-cards"></div>
+      <div class="balance-card balance-total" id="balance-total-card">
+        <span class="balance-name">סה״כ זמין (לא כולל חיסכון)</span>
+        <span class="balance-amount" id="balance-total-amount">0₪</span>
+      </div>
+      <button id="save-balances" class="submit-btn">שמירה / איפוס יתרות</button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>חסכונות</h2></div>
+      <p class="panel-desc">הכנסה שמסומנת כ"חיסכון" ב-+ נכנסת אוטומטית ל"חיסכון כללי" כאן ולא נספרת ביתרה הזמינה. בנוסף אפשר להגדיר יעדי חיסכון ספציפיים ולעדכן אותם ידנית.</p>
+      <div id="savings-list" class="savings-list"></div>
+      <div class="add-vendor-row">
+        <input type="text" id="new-savings-name" placeholder="שם היעד (לדוגמה: קרן חירום)">
+        <input type="number" id="new-savings-target" placeholder="סכום יעד" min="0">
+        <button id="add-savings-btn" class="mini-btn">הוסף</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== BUDGET VIEW ============== -->
+  <section class="view hidden" data-view="budget">
+    <div class="panel">
+      <div class="panel-head"><h2>תקציב חודשי לפי קטגוריה</h2></div>
+      <p class="panel-desc">הגדירו תקרה חודשית לכל קטגוריה ועקבו כמה כבר הוצאתם החודש ביחס אליה.</p>
+      <div id="budget-rows" class="budget-rows"></div>
+      <button id="save-budget" class="submit-btn">שמירת תקציב</button>
+    </div>
+  </section>
+
+  <!-- ============== REPORTS VIEW ============== -->
+  <section class="view hidden" data-view="reports">
+    <!-- Net balance hero card -->
+    <div id="reports-net-card" class="reports-net-card">
+      <div class="reports-net-label">הכנסות מול הוצאות</div>
+      <div id="reports-net-period" class="reports-net-period">החודש הנוכחי</div>
+      <div id="reports-net-figure" class="reports-net-figure">0 ₪</div>
+      <div id="reports-net-sub" class="reports-net-sub"></div>
+    </div>
+
+    <!-- Period selector + partner filter -->
+    <div class="panel">
+      <div class="report-period-row">
+        <button class="period-btn active" data-period="month">חודשי</button>
+        <button class="period-btn" data-period="quarter">רבעוני</button>
+        <button class="period-btn" data-period="year">שנתי</button>
+        <button class="period-btn" data-period="all">הכל</button>
+      </div>
+      <div class="report-partner-row" id="report-partner-row" data-couple-only>
+        <button class="partner-filter-btn active" data-partner-filter="all">כולם</button>
+        <button class="partner-filter-btn" data-partner-filter="p1" id="partner-filter-p1">בן/בת זוג 1</button>
+        <button class="partner-filter-btn" data-partner-filter="p2" id="partner-filter-p2">בן/בת זוג 2</button>
+      </div>
+    </div>
+
+    <!-- Pie chart - expense/income tabs -->
+    <div class="panel">
+      <div class="tab-switch">
+        <button class="tab-btn active" data-report="expenses">הוצאות</button>
+        <button class="tab-btn" data-report="income">הכנסות</button>
+      </div>
+      <div class="panel-head"><h2 id="pie-title">פילוח הוצאות</h2></div>
+      <div id="report-pie-wrap"></div>
+    </div>
+
+    <!-- Category breakdown table -->
+    <div class="panel">
+      <div class="panel-head"><h2 id="cat-breakdown-title">הוצאות לפי קטגוריה</h2></div>
+      <div id="cat-breakdown-list"></div>
+    </div>
+
+    <!-- Monthly comparison insights -->
+    <div class="panel">
+      <div class="panel-head"><h2>תובנות לעומת החודש הקודם</h2></div>
+      <div id="insights-panel"></div>
+    </div>
+
+    <!-- Cash-flow bar chart -->
+    <div class="panel">
+      <div class="panel-head"><h2>תזרים חודשי (הכנסות מול הוצאות)</h2></div>
+      <div id="monthly-chart" class="monthly-chart"></div>
+      <div class="chart-legend">
+        <span><i class="legend-dot dot-income"></i> הכנסות</span>
+        <span><i class="legend-dot dot-expense"></i> הוצאות</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== EVENTS VIEW ============== -->
+  <section class="view hidden" data-view="events">
+    <div class="panel">
+      <div class="panel-head"><h2>תקציבי אירועים</h2></div>
+      <p class="panel-desc">כל אירוע (טיול, שמחה, שיפוץ וכו') מקבל תקציב נפרד. הוצאות האירוע יורדות מהיתרה האמיתית שלכם, אבל לא יופיעו בהוצאות החודשיות הרגילות.</p>
+      <button id="open-add-event" class="submit-btn">+ אירוע חדש</button>
+    </div>
+    <div id="events-list-panel" class="panel">
+      <div id="events-list"><p class="empty-hint">עדיין אין אירועים פעילים</p></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>אירועים שהסתיימו</h2></div>
+      <div id="events-closed-list"><p class="empty-hint">עדיין אין אירועים שהסתיימו</p></div>
+    </div>
+  </section>
+
+  <!-- ============== MAASER VIEW ============== -->
+  <section class="view hidden" data-view="maaser">
+    <div id="maaser-hero" class="maaser-hero">
+      <div class="maaser-hero-label">חובת מעשרות כוללת</div>
+      <div id="maaser-owed-fig" class="maaser-hero-fig">0 ₪</div>
+      <div id="maaser-hero-sub" class="maaser-hero-sub"></div>
+    </div>
+    <div class="panel">
+      <div class="maaser-stat-row">
+        <div class="maaser-stat">
+          <span class="maaser-stat-label">סך הכנסות לחישוב</span>
+          <span id="maaser-total-income" class="maaser-stat-val">0₪</span>
+        </div>
+        <div class="maaser-stat">
+          <span class="maaser-stat-label">10% = חובת מעשרות</span>
+          <span id="maaser-owed-stat" class="maaser-stat-val">0₪</span>
+        </div>
+        <div class="maaser-stat">
+          <span class="maaser-stat-label">שולם עד כה</span>
+          <span id="maaser-paid-total" class="maaser-stat-val paid">0₪</span>
+        </div>
+        <div class="maaser-stat">
+          <span class="maaser-stat-label">נשאר לשלם</span>
+          <span id="maaser-remaining" class="maaser-stat-val remaining">0₪</span>
+        </div>
+      </div>
+      <button id="open-add-maaser" class="submit-btn">+ תשלום מעשרות לצדקה</button>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>תשלומי מעשרות</h2></div>
+      <div id="maaser-payments-list" class="expense-list">
+        <p class="empty-hint">עדיין לא שולמו מעשרות</p>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head panel-head-row">
+        <h2>אופן חישוב</h2>
+      </div>
+      <p class="panel-desc" id="maaser-calc-explanation"></p>
+    </div>
+  </section>
+
+  <!-- ============== SETTINGS VIEW ============== -->
+  <section class="view hidden" data-view="settings">
+    <div class="panel">
+      <div class="panel-head"><h2>הגדרות כלליות</h2></div>
+      <div class="setting-row">
+        <div class="setting-row-info">
+          <span class="setting-row-title">מוציאים מעשרות</span>
+          <span class="setting-row-sub">הצג מסך מעשרות וחשב חובת תרומה (10% מהכנסות)</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-maaser">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row" id="self-employed-row">
+        <div class="setting-row-info">
+          <span class="setting-row-title">הזוג עצמאי/ת</span>
+          <span class="setting-row-sub">מוסיף קטגוריית "עסק" להוצאות — לא משפיע על חישוב המעשרות</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-self-employed">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>קטגוריות הוצאה</h2></div>
+      <div id="category-manage-list" class="category-manage-list"></div>
+      <div class="add-category-row">
+        <input type="text" id="new-category-input" placeholder="קטגוריה חדשה...">
+        <button id="add-category-btn" class="mini-btn">הוסף</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>קטגוריות הכנסה</h2></div>
+      <div id="income-category-manage-list" class="category-manage-list"></div>
+      <div class="add-category-row">
+        <input type="text" id="new-income-category-input" placeholder="קטגוריה חדשה...">
+        <button id="add-income-category-btn" class="mini-btn">הוסף</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>ייבוא מהבנק</h2></div>
+      <p class="panel-desc">מעלים קובץ CSV של דוח תנועות מהבנק, והמערכת תנחש קטגוריה לכל תנועה ותיתן לבחור מה בדיוק לייבא לפני שמירה.</p>
+      <input type="file" id="bank-csv-input" accept=".csv,text/csv" class="hidden">
+      <button id="open-bank-import" class="submit-btn">בחירת קובץ CSV</button>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>ייצוא נתונים</h2></div>
+      <p class="panel-desc">מוריד קובץ CSV עם כל ההוצאות וההכנסות, שאפשר לפתוח או לייבא ישירות ל-Google Sheets.</p>
+      <button id="export-csv-btn" class="submit-btn">ייצוא ל-CSV</button>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>החשבון שלנו</h2></div>
+      <p class="panel-desc" id="settings-user-email"></p>
+      <button id="logout-btn" class="submit-btn logout-btn">יציאה מהחשבון</button>
+    </div>
+    <div class="panel danger-panel">
+      <div class="panel-head"><h2>אזור מסוכן</h2></div>
+      <p class="panel-desc">מחיקת כל ההוצאות וההכנסות לצמיתות - אין דרך לבטל.</p>
+      <button id="clear-all-btn" class="danger-btn">מחיקת כל הנתונים</button>
+    </div>
+  </section>
+
+  <!-- ============== RECURRING (EXPENSE + INCOME) VIEW ============== -->
+  <section class="view hidden" data-view="recurring">
+    <div class="panel">
+      <div class="panel-head"><h2>תנועות קבועות</h2></div>
+      <p class="panel-desc">הגדירו חיוב או זיכוי חוזר (שכירות, משכורת, מנויים וכו') ובכל פעם שנכנסים לאפליקציה היא בודקת אם הגיע הזמן לתנועה הבאה ומוסיפה אותה אוטומטית.</p>
+      <button id="open-add-recurring" class="submit-btn">+ תנועה קבועה חדשה</button>
+    </div>
+    <div class="panel">
+      <div id="recurring-list"><p class="empty-hint">עדיין אין תנועות קבועות</p></div>
+    </div>
+  </section>
+
+  <!-- ============== DEBTS VIEW ============== -->
+  <section class="view hidden" data-view="debts">
+    <div class="hero-card debts-hero">
+      <div class="hero-top">
+        <span class="hero-eyebrow">מאזן חובות</span>
+        <span class="hero-badge" id="debts-badge">—</span>
+      </div>
+      <div class="hero-figure" id="debts-net-figure">0 ₪</div>
+      <div class="hero-sub" id="debts-net-sub">אין חובות פתוחים</div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card tint-rose">
+        <span class="stat-label">אנחנו חייבים</span>
+        <span class="stat-value" id="stat-we-owe">0₪</span>
+      </div>
+      <div class="stat-card tint-green">
+        <span class="stat-label">חייבים לנו</span>
+        <span class="stat-value" id="stat-owed-to-us">0₪</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <button id="open-add-debt" class="submit-btn">+ חוב חדש</button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>סיכום לפי אדם</h2></div>
+      <div id="debts-by-person"><p class="empty-hint">אין חובות פתוחים</p></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>חובות פתוחים</h2></div>
+      <div id="debts-open-list" class="expense-list"><p class="empty-hint">אין חובות פתוחים כרגע</p></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>היסטוריה (חובות שנסגרו)</h2></div>
+      <div id="debts-settled-list" class="expense-list"><p class="empty-hint">עדיין אין היסטוריה</p></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- Floating add button -->
+<button id="open-add" class="fab" aria-label="הוסף">+</button>
+
+<!-- Add recurring expense/income modal -->
+<div id="recurring-modal-overlay" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="recurring-modal-title">תנועה קבועה חדשה</h3>
+      <button id="close-recurring-modal" class="modal-close" aria-label="סגור">✕</button>
+    </div>
+    <div class="tab-switch">
+      <button type="button" class="tab-btn active" data-rtype="expense">הוצאה</button>
+      <button type="button" class="tab-btn" data-rtype="income">הכנסה</button>
+    </div>
+    <form id="recurring-form">
+      <label class="field">
+        <span id="recurring-name-label">שם ההוצאה</span>
+        <input type="text" id="recurring-name" required placeholder="לדוגמה: שכירות, נטפליקס, חדר כושר">
+      </label>
+      <label class="field">
+        <span>סכום (₪)</span>
+        <input type="number" id="recurring-amount" inputmode="decimal" min="0" step="0.1" required>
+      </label>
+      <label class="field">
+        <span>קטגוריה</span>
+        <select id="recurring-category"></select>
+      </label>
+      <label class="field">
+        <span>תדירות</span>
+        <select id="recurring-frequency">
+          <option value="monthly">חודשי</option>
+          <option value="weekly">שבועי</option>
+          <option value="yearly">שנתי</option>
+        </select>
+      </label>
+      <div class="field">
+        <span id="recurring-account-label">ממי זה יוצא?</span>
+        <div class="who-pay">
+          <label class="who-option">
+            <input type="radio" name="recurringAccount" value="יוסף" data-partner="1" checked>
+            <span data-partner-label="1">יוסף</span>
+          </label>
+          <label class="who-option" data-couple-only>
+            <input type="radio" name="recurringAccount" value="אגם" data-partner="2">
+            <span data-partner-label="2">אגם</span>
+          </label>
+          <label class="who-option who-option-cash">
+            <input type="radio" name="recurringAccount" value="מזומן">
+            <span>מזומן 💵</span>
+          </label>
+          <label class="who-option who-option-savings">
+            <input type="radio" name="recurringAccount" value="חיסכון">
+            <span>חיסכון 💰</span>
+          </label>
+        </div>
+      </div>
+      <button type="submit" class="submit-btn" id="recurring-submit-btn">הוספה + חיוב ראשון עכשיו</button>
+    </form>
+  </div>
+</div>
+
+<!-- Maaser payment modal -->
+<div id="maaser-modal-overlay" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>תשלום מעשרות לצדקה</h3>
+      <button id="close-maaser-modal" class="modal-close" aria-label="סגור">✕</button>
+    </div>
+    <form id="maaser-form">
+      <label class="field">
+        <span>סכום (₪)</span>
+        <input type="number" id="maaser-amount" inputmode="decimal" min="0" step="0.01" required>
+      </label>
+      <label class="field">
+        <span>שם העמותה / הנמען</span>
+        <input type="text" id="maaser-org" placeholder="לדוגמה: חברה אלמונית, כולל פלוני">
+      </label>
+      <div class="field">
+        <span>מאיזה ארנק?</span>
+        <div class="who-pay">
+          <label class="who-option"><input type="radio" name="maaserAccount" value="יוסף" data-partner="1" checked><span data-partner-label="1">יוסף</span></label>
+          <label class="who-option"><input type="radio" name="maaserAccount" value="אגם" data-partner="2"><span data-partner-label="2">אגם</span></label>
+          <label class="who-option who-option-cash"><input type="radio" name="maaserAccount" value="מזומן"><span>מזומן 💵</span></label>
+        </div>
+      </div>
+      <button type="submit" class="submit-btn">שמירת התשלום</button>
+    </form>
+  </div>
+</div>
+
+<!-- Balance flash overlay -->
+<div id="balance-flash" class="balance-flash hidden" aria-live="polite">
+  <div class="balance-flash-inner">
+    <div id="balance-flash-icon" class="balance-flash-icon">💵</div>
+    <div class="balance-flash-content">
+      <div id="balance-flash-label" class="balance-flash-label">מזומן</div>
+      <div id="balance-flash-amount" class="balance-flash-amount">0 ₪</div>
+      <div id="balance-flash-delta" class="balance-flash-delta"></div>
+    </div>
+  </div>
+</div>
+
+<!-- New event modal -->
+<div id="event-modal-overlay" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="event-modal-title">אירוע חדש</h3>
+      <button id="close-event-modal" class="modal-close" aria-label="סגור">✕</button>
+    </div>
+    <form id="event-form">
+      <label class="field">
+        <span>שם האירוע</span>
+        <input type="text" id="event-name" required placeholder="לדוגמה: טיול איטליה, שיפוץ מטבח">
+      </label>
+      <label class="field">
+        <span>תקציב מתוכנן (₪)</span>
+        <input type="number" id="event-budget" inputmode="decimal" min="0" step="1" required placeholder="0">
+      </label>
+      <label class="field">
+        <span>אמוג'י / סמל</span>
+        <input type="text" id="event-icon" placeholder="✈️" maxlength="4" class="icon-picker">
+      </label>
+      <button type="submit" class="submit-btn">יצירת האירוע</button>
+    </form>
+  </div>
+</div>
+
+<!-- Add expense to event modal -->
+<div id="event-expense-modal-overlay" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="event-expense-title">הוצאה לאירוע</h3>
+      <button id="close-event-expense-modal" class="modal-close" aria-label="סגור">✕</button>
+    </div>
+    <form id="event-expense-form">
+      <label class="field">
+        <span>סכום (₪)</span>
+        <input type="number" id="event-expense-amount" inputmode="decimal" min="0" step="0.1" required>
+      </label>
+      <label class="field">
+        <span>על מה?</span>
+        <input type="text" id="event-expense-desc" placeholder="לדוגמה: מלון, כרטיסי טיסה, אוכל">
+      </label>
+      <label class="field">
+        <span>קטגוריה</span>
+        <select id="event-expense-category"></select>
+      </label>
+      <div class="field">
+        <span>מי שילם?</span>
+        <div class="who-pay">
+          <label class="who-option">
+            <input type="radio" name="eventExpenseAccount" value="יוסף" data-partner="1" checked><span data-partner-label="1">יוסף</span>
+          </label>
+          <label class="who-option" data-couple-only>
+            <input type="radio" name="eventExpenseAccount" value="אגם" data-partner="2"><span data-partner-label="2">אגם</span>
+          </label>
+          <label class="who-option who-option-cash">
+            <input type="radio" name="eventExpenseAccount" value="מזומן"><span>מזומן 💵</span>
+          </label>
+          <label class="who-option who-option-savings">
+            <input type="radio" name="eventExpenseAccount" value="חיסכון"><span>חיסכון 💰</span>
+          </label>
+        </div>
+      </div>
+      <button type="submit" class="submit-btn">הוספת הוצאה</button>
+    </form>
+  </div>
+</div>
+
+<!-- Bank CSV import preview modal -->
+<div id="import-modal-overlay" class="modal-overlay hidden">
+  <div class="modal import-modal">
+    <div class="modal-head">
+      <h3>ייבוא מהבנק</h3>
+      <button id="close-import-modal" class="modal-close" aria-label="סגור">✕</button>
+    </div>
+    <p class="panel-desc" id="import-summary"></p>
+    <div class="field">
+      <span>לאיזה ארנק שייך הדוח?</span>
+      <div class="who-pay">
+        <label class="who-option">
+          <input type="radio" name="importAccount" value="יוסף" data-partner="1" checked>
+          <span data-partner-label="1">יוסף</span>
+        </label>
+        <label class="who-option" data-couple-only>
+            <input type="radio" name="importAccount" value="אגם" data-partner="2">
+          <span data-partner-label="2">אגם</span>
+        </label>
+        <label class="who-option who-option-cash">
+          <input type="radio" name="importAccount" value="מזומן">
+          <span>מזומן 💵</span>
+        </label>
+        <label class="who-option who-option-savings">
+          <input type="radio" name="importAccount" value="חיסכון">
+          <span>חיסכון 💰</span>
+        </label>
+      </div>
+    </div>
+    <div class="import-toolbar">
+      <button type="button" id="import-select-all" class="mini-btn">בחר הכל</button>
+      <button type="button" id="import-deselect-all" class="mini-btn">בטל הכל</button>
+    </div>
+    <div id="import-rows-list" class="import-rows-list"></div>
+    <button id="confirm-import-btn" class="submit-btn">ייבוא תנועות נבחרות</button>
+  </div>
+</div>
+
+<!-- Add debt modal -->
+<div id="debt-modal-overlay" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>חוב חדש</h3>
+      <button id="close-debt-modal" class="modal-close" aria-label="סגור">✕</button>
+    </div>
+    <form id="debt-form">
+      <label class="field">
+        <span>שם האדם</span>
+        <input type="text" id="debt-name" required placeholder="לדוגמה: דני כהן">
+      </label>
+      <label class="field">
+        <span>סכום (₪)</span>
+        <input type="number" id="debt-amount" inputmode="decimal" min="0" step="0.1" required>
+      </label>
+      <div class="field">
+        <span>כיוון</span>
+        <div class="who-pay debt-direction">
+          <label class="who-option">
+            <input type="radio" name="debtDirection" value="owe" checked>
+            <span>אנחנו חייבים</span>
+          </label>
+          <label class="who-option">
+            <input type="radio" name="debtDirection" value="owed">
+            <span>חייבים לנו</span>
+          </label>
+        </div>
+      </div>
+      <label class="field">
+        <span>הערה (לא חובה)</span>
+        <input type="text" id="debt-note" placeholder="על מה זה?">
+      </label>
+      <button type="submit" class="submit-btn">הוספת חוב</button>
+    </form>
+  </div>
+</div>
+
+<!-- Add expense/income modal -->
+<div id="modal-overlay" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modal-title">תנועה חדשה</h3>
+      <button id="close-add" class="modal-close" aria-label="סגור">✕</button>
+    </div>
+    <div class="tab-switch">
+      <button type="button" class="tab-btn active" data-type="expense">הוצאה</button>
+      <button type="button" class="tab-btn" data-type="income">הכנסה</button>
+    </div>
+    <form id="expense-form">
+      <label class="field">
+        <span>סכום (₪)</span>
+        <input type="number" id="amount" inputmode="decimal" min="0" step="0.1" required>
+      </label>
+      <label class="field">
+        <span id="description-label">על מה?</span>
+        <input type="text" id="description" placeholder="לדוגמה: סופר, דלק, בילוי">
+      </label>
+      <label class="field">
+        <span>קטגוריה</span>
+        <select id="category"></select>
+      </label>
+      <div class="field">
+        <span id="account-label">מי שילם?</span>
+        <div class="who-pay">
+          <label class="who-option">
+            <input type="radio" name="payAccount" value="יוסף" data-partner="1" checked>
+            <span data-partner-label="1">יוסף</span>
+          </label>
+          <label class="who-option" data-couple-only>
+            <input type="radio" name="payAccount" value="אגם" data-partner="2">
+            <span data-partner-label="2">אגם</span>
+          </label>
+          <label class="who-option who-option-cash">
+            <input type="radio" name="payAccount" value="מזומן">
+            <span>מזומן 💵</span>
+          </label>
+          <label class="who-option who-option-savings">
+            <input type="radio" name="payAccount" value="חיסכון">
+            <span>חיסכון 💰</span>
+          </label>
+        </div>
+      </div>
+      <button type="submit" class="submit-btn" id="submit-btn">הוסף הוצאה</button>
+    </form>
+  </div>
+</div>
+
+<!-- Side drawer menu -->
+<div id="drawer-overlay" class="drawer-overlay hidden">
+  <nav class="drawer">
+    <div class="drawer-head">
+      <div class="drawer-app-icon">💰</div>
+      <div class="drawer-app-text">
+        <span class="drawer-app-title">הקופה המשותפת</span>
+        <span class="drawer-app-sub">ניהול הוצאות משפחתי</span>
+      </div>
+      <button id="close-menu" class="modal-close" aria-label="סגור">✕</button>
+    </div>
+    <div class="drawer-status">
+      <span class="status-dot"></span>
+      הנתונים מסונכרנים בזמן אמת בין שניכם
+    </div>
+    <div class="drawer-items">
+      <button class="drawer-item active" data-view="dashboard">
+        <span class="drawer-icon">▦</span>
+        <span class="drawer-item-text"><span class="drawer-item-title">לוח בקרה</span><span class="drawer-item-sub">סקירה כללית</span></span>
+      </button>
+      <button class="drawer-item" data-view="expenses">
+        <span class="drawer-icon">🧾</span>
+        <span class="drawer-item-text"><span class="drawer-item-title">הוצאות</span><span class="drawer-item-sub">כל התנועות</span></span>
+      </button>
+      <button class="drawer-item" data-view="income">
+        <span class="drawer-icon">💵</span>
+        <span class="drawer-item-text"><span class="drawer-item-title">הכנסות</span><span class="drawer-item-sub">משכורות ועוד</span></span>
+      </button>
+      <button class="drawer-item" data-view="finances">
+        <span class="drawer-icon">🏦</span>
+        <span class="drawer-item-text"><span class="drawer-item-title">כספים וחיסכון</span><span class="drawer-item-sub">יתרות ויעדים</span></span>
+      </button>
+      <button class="drawer-item" data-view="budget">
+        <span class="drawer-icon">🎯</span>
+        <span class="drawer-item-text"><span class="drawer-item-title">תקציב חודשי</span><span class="drawer-item-sub">יעדים לכל קטגוריה</span></span>
+      </button>
+      <button class="drawer-item" data-view="recurring">
+        <span class="drawer-icon">🔁</span>
+        <span class="drawer-item-text"><span class="drawer-item-title">תנועות קבועות</span><span class="drawer-item-sub">הכנסות והוצאות חוזרות</span></span>
+      </button>
+      <button class="drawer-item" data-view="events">
+        <span class="drawer-icon">🎯</span>
+        <span class="drawer-item-text"><span class="drawer-item-title">תקציבי אירועים</span><span class="drawer-item-sub">טיולים ואירועים מיוחדים</span></span>
+      </button>
+      <button class="drawer-item hidden" id="maaser-drawer-item" data-view="maaser">
+        <span class="drawer-icon">🤲</span>
+        <span class="drawer-item-text"><span class="drawer-item-title">מעשרות</span><span class="drawer-item-sub">חישוב ותשלום לצדקה</span></span>
+      </button>
+      <button class="drawer-item" data-view="reports">
+        <span class="drawer-icon">📊</span>
+        <span class="drawer-item-text"><span class="drawer-item-title">דוחות וניתוח</span><span class="drawer-item-sub">פיצ׳רים ומגמות</span></span>
+      </button>
+      <button class="drawer-item" data-view="debts">
+        <span class="drawer-icon">🤝</span>
+        <span class="drawer-item-text"><span class="drawer-item-title">חובות</span><span class="drawer-item-sub">אנחנו ↔ אנשים אחרים</span></span>
+      </button>
+      <button class="drawer-item" data-view="settings">
+        <span class="drawer-icon">⚙️</span>
+        <span class="drawer-item-text"><span class="drawer-item-title">הגדרות</span><span class="drawer-item-sub">קטגוריות ועוד</span></span>
+      </button>
+    </div>
+  </nav>
+</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="app.js?v=3"></script>
+</body>
+</html>
