@@ -82,14 +82,17 @@ function startFirestoreListeners() {
         partner1Name: data.partner1Name || "בן/בת זוג 1",
         partner2Name: data.partner2Name || null,
         accountType: data.accountType || "couple",
-        onboardingDone: data.onboardingDone || false
+        onboardingDone: data.onboardingDone || false,
+        setupDone: data.setupDone || false,
+        tutorialDone: data.tutorialDone || false
       };
-      // Update app title
       const titleEl = document.getElementById("app-title");
       if (titleEl) titleEl.textContent = config.kupahName || "הקופה המשותפת";
-      // Show onboarding for new users
-      if (!config.onboardingDone && document.getElementById("app") && !document.getElementById("app").classList.contains("app-hidden")) {
-        showOnboarding(config.kupahName);
+      const appVisible = document.getElementById("app") && !document.getElementById("app").classList.contains("app-hidden");
+      if (appVisible) {
+        if (!config.onboardingDone) { showOnboarding(config.kupahName); }
+        else if (!config.setupDone && !window._setupShown) { window._setupShown = true; showSetupWizard(); }
+        else if (config.setupDone && !config.tutorialDone && !window._tutorialShown) { window._tutorialShown = true; startTutorial(); }
       }
       updatePartnerNamesInUI();
       populateCategorySelects();
@@ -1519,6 +1522,14 @@ document.getElementById("logout-btn").addEventListener("click", () => {
   if (!confirm("לצאת מהחשבון?")) return;
   auth.signOut();
 });
+document.getElementById("restart-tutorial-btn").addEventListener("click", () => {
+  window._tutorialShown = false;
+  configRef.set({ tutorialDone: false }, { merge: true }).then(() => startTutorial());
+});
+document.getElementById("restart-setup-btn").addEventListener("click", () => {
+  window._setupShown = false;
+  configRef.set({ setupDone: false }, { merge: true }).then(() => showSetupWizard());
+});
 document.getElementById("clear-all-btn").addEventListener("click", () => {
   if (!confirm("בטוחים? כל ההוצאות וההכנסות יימחקו לצמיתות.")) return;
   if (!confirm("רגע אחרון - זו פעולה שאי אפשר לבטל. למחוק הכל?")) return;
@@ -2164,6 +2175,332 @@ document.getElementById("admin-generate-code-btn").addEventListener("click", gen
 
 document.getElementById("admin-logout-btn").addEventListener("click", () => auth.signOut());
 document.getElementById("admin-refresh-btn").addEventListener("click", () => loadAdminPanel());
+
+/* ============================================================
+   FINANCIAL SETUP WIZARD
+   ============================================================ */
+let setupStep = 0;
+let setupData = {};
+
+function buildSetupSlides() {
+  const isSolo = soloMode();
+  const n1 = p1(), n2 = p2();
+  const slides = [];
+
+  // Slide 0 — welcome
+  slides.push({
+    id: "welcome",
+    html: `<div class="setup-slide-inner">
+      <div class="setup-emoji">💰</div>
+      <h2>הגדרת יתרות פתיחה</h2>
+      <p>בשביל שנוכל לחשב נכון כמה כסף יש לכם ביחד — ספרו לנו מה המצב הנוכחי. זה לוקח 2 דקות.</p>
+    </div>`
+  });
+
+  // Slide 1 — partner1 balances
+  slides.push({
+    id: "p1",
+    html: `<div class="setup-slide-inner">
+      <div class="setup-emoji">👤</div>
+      <h2>יתרות של ${n1}</h2>
+      <label class="field"><span>עו"ש (עובר ושב) ₪</span>
+        <input type="number" id="setup-p1-bank" inputmode="decimal" min="0" placeholder="0"></label>
+      <label class="field"><span>ביט / פייבוקס ₪</span>
+        <input type="number" id="setup-p1-bit" inputmode="decimal" min="0" placeholder="0"></label>
+    </div>`
+  });
+
+  // Slide 2 — partner2 (couple only)
+  if (!isSolo) {
+    slides.push({
+      id: "p2",
+      html: `<div class="setup-slide-inner">
+        <div class="setup-emoji">👩</div>
+        <h2>יתרות של ${n2}</h2>
+        <label class="field"><span>עו"ש (עובר ושב) ₪</span>
+          <input type="number" id="setup-p2-bank" inputmode="decimal" min="0" placeholder="0"></label>
+        <label class="field"><span>ביט / פייבוקס ₪</span>
+          <input type="number" id="setup-p2-bit" inputmode="decimal" min="0" placeholder="0"></label>
+      </div>`
+    });
+  }
+
+  // Slide 3 — cash
+  slides.push({
+    id: "cash",
+    html: `<div class="setup-slide-inner">
+      <div class="setup-emoji">💵</div>
+      <h2>מזומן</h2>
+      <label class="field"><span>כמה מזומן יש לכם ביחד? ₪</span>
+        <input type="number" id="setup-cash" inputmode="decimal" min="0" placeholder="0"></label>
+    </div>`
+  });
+
+  // Slide 4 — savings
+  slides.push({
+    id: "savings",
+    html: `<div class="setup-slide-inner">
+      <div class="setup-emoji">🏦</div>
+      <h2>חסכונות</h2>
+      <label class="field"><span>סכום חסכונות כולל ₪</span>
+        <input type="number" id="setup-savings-total" inputmode="decimal" min="0" placeholder="0"></label>
+      <div class="field">
+        <span>יעדי חיסכון (אופציונלי)</span>
+        <div id="setup-goals-list" class="setup-goals-list"></div>
+        <div class="setup-goal-add-row">
+          <input type="text" id="setup-goal-name" placeholder='למשל: "נסיעה לאירופה"' style="flex:1;">
+          <input type="number" id="setup-goal-target" inputmode="decimal" placeholder="יעד ₪" style="width:100px;">
+          <button type="button" onclick="addSetupGoal()" class="mini-btn">+</button>
+        </div>
+      </div>
+    </div>`
+  });
+
+  // Slide 5 — done
+  slides.push({
+    id: "done",
+    html: `<div class="setup-slide-inner">
+      <div class="setup-emoji">✅</div>
+      <h2>מוכנים!</h2>
+      <p>היתרות נשמרו. תוכלו לעדכן אותן בכל עת דרך <strong>כספים וחסכונות</strong>.</p>
+      <div id="setup-summary" class="setup-summary"></div>
+    </div>`
+  });
+
+  return slides;
+}
+
+let setupSlides = [];
+let setupGoals = [];
+
+function addSetupGoal() {
+  const name = document.getElementById("setup-goal-name").value.trim();
+  const target = parseFloat(document.getElementById("setup-goal-target").value) || 0;
+  if (!name) return;
+  setupGoals.push({ id: "g" + Date.now(), name, target, saved: 0 });
+  document.getElementById("setup-goal-name").value = "";
+  document.getElementById("setup-goal-target").value = "";
+  renderSetupGoals();
+}
+function renderSetupGoals() {
+  const el = document.getElementById("setup-goals-list");
+  if (!el) return;
+  el.innerHTML = setupGoals.map((g, i) =>
+    `<div class="setup-goal-chip">${escapeHtml(g.name)} — ${Math.round(g.target).toLocaleString()}₪
+     <button onclick="removeSetupGoal(${i})" style="background:none;border:none;cursor:pointer;font-size:14px;">✕</button></div>`
+  ).join("");
+}
+function removeSetupGoal(i) { setupGoals.splice(i, 1); renderSetupGoals(); }
+
+function collectSetupStep() {
+  const slide = setupSlides[setupStep];
+  if (slide.id === "p1") {
+    setupData.p1Bank  = parseFloat(document.getElementById("setup-p1-bank")?.value) || 0;
+    setupData.p1Bit   = parseFloat(document.getElementById("setup-p1-bit")?.value)  || 0;
+  } else if (slide.id === "p2") {
+    setupData.p2Bank  = parseFloat(document.getElementById("setup-p2-bank")?.value) || 0;
+    setupData.p2Bit   = parseFloat(document.getElementById("setup-p2-bit")?.value)  || 0;
+  } else if (slide.id === "cash") {
+    setupData.cash    = parseFloat(document.getElementById("setup-cash")?.value)     || 0;
+  } else if (slide.id === "savings") {
+    setupData.savings = parseFloat(document.getElementById("setup-savings-total")?.value) || 0;
+  }
+}
+
+function renderSetupSlide() {
+  const slide = setupSlides[setupStep];
+  document.getElementById("setup-slides").innerHTML = slide.html;
+  if (slide.id === "savings") renderSetupGoals();
+  if (slide.id === "done") renderSetupSummary();
+
+  // Dots
+  document.getElementById("setup-step-dots").innerHTML =
+    setupSlides.map((_, i) => `<span class="onboard-dot ${i === setupStep ? "active" : ""}"></span>`).join("");
+
+  // Nav buttons
+  const backBtn = document.getElementById("setup-back-btn");
+  const nextBtn = document.getElementById("setup-next-btn");
+  backBtn.style.opacity = setupStep === 0 ? "0" : "1";
+  backBtn.style.pointerEvents = setupStep === 0 ? "none" : "auto";
+  nextBtn.textContent = setupStep === setupSlides.length - 1 ? "🚀 בואו נתחיל!" : "הבא ›";
+}
+
+function renderSetupSummary() {
+  const n1 = p1(), n2 = p2(); const isSolo = soloMode();
+  const p1Total = (setupData.p1Bank || 0) + (setupData.p1Bit || 0);
+  const p2Total = isSolo ? 0 : (setupData.p2Bank || 0) + (setupData.p2Bit || 0);
+  const el = document.getElementById("setup-summary");
+  if (!el) return;
+  el.innerHTML = `
+    <div class="setup-sum-row"><span>${n1}</span><strong>${p1Total.toLocaleString()}₪</strong></div>
+    ${!isSolo ? `<div class="setup-sum-row"><span>${n2}</span><strong>${p2Total.toLocaleString()}₪</strong></div>` : ""}
+    <div class="setup-sum-row"><span>מזומן</span><strong>${(setupData.cash||0).toLocaleString()}₪</strong></div>
+    <div class="setup-sum-row"><span>חסכונות</span><strong>${(setupData.savings||0).toLocaleString()}₪</strong></div>
+    <div class="setup-sum-row total"><span>סה"כ</span><strong>${(p1Total + p2Total + (setupData.cash||0) + (setupData.savings||0)).toLocaleString()}₪</strong></div>`;
+}
+
+async function finishSetupWizard() {
+  const n1 = p1(), n2 = p2(); const isSolo = soloMode();
+  const p1Total = (setupData.p1Bank || 0) + (setupData.p1Bit || 0);
+  const p2Total = isSolo ? 0 : (setupData.p2Bank || 0) + (setupData.p2Bit || 0);
+  const balances = { [n1]: p1Total, "מזומן": setupData.cash || 0, "חיסכון": setupData.savings || 0 };
+  if (!isSolo && n2) balances[n2] = p2Total;
+  await configRef.set({
+    accountBalances: balances,
+    savingsGoals: setupGoals,
+    setupDone: true
+  }, { merge: true });
+  document.getElementById("setup-wizard-overlay").classList.add("hidden");
+}
+
+function showSetupWizard() {
+  setupStep = 0; setupGoals = []; setupData = {};
+  setupSlides = buildSetupSlides();
+  renderSetupSlide();
+  document.getElementById("setup-wizard-overlay").classList.remove("hidden");
+}
+
+document.getElementById("setup-next-btn").addEventListener("click", () => {
+  collectSetupStep();
+  if (setupStep === setupSlides.length - 1) { finishSetupWizard(); return; }
+  setupStep++;
+  renderSetupSlide();
+});
+document.getElementById("setup-back-btn").addEventListener("click", () => {
+  if (setupStep > 0) { setupStep--; renderSetupSlide(); }
+});
+document.getElementById("setup-skip-btn").addEventListener("click", async () => {
+  if (confirm("לדלג על ההגדרה? תוכלו להגדיר יתרות בכל עת דרך כספים וחסכונות.")) {
+    await configRef.set({ setupDone: true }, { merge: true });
+    document.getElementById("setup-wizard-overlay").classList.add("hidden");
+  }
+});
+
+/* ============================================================
+   INTERACTIVE TUTORIAL
+   ============================================================ */
+const TUTORIAL_STEPS = [
+  {
+    target: null,
+    title: "ברוכים הבאים! 🎉",
+    desc: "בואו נסייר יחד בפיצ'רים הראשיים של האפליקציה. לוחצים 'הבא' בכל שלב."
+  },
+  {
+    target: "#open-add",
+    title: "כפתור + להוספה",
+    desc: "זה הכפתור הכי חשוב — לחיצה עליו פותחת חלון להוספת הוצאה או הכנסה. פשוט וחכם."
+  },
+  {
+    target: "#open-menu",
+    title: "תפריט ניווט ☰",
+    desc: "כאן תמצאו את כל הסעיפים: הוצאות, הכנסות, כספים, דוחות, חובות, תנועות קבועות ועוד."
+  },
+  {
+    target: ".hero-card",
+    title: "לוח הבקרה 📊",
+    desc: "הכרטיסייה הראשית מראה את סך ההוצאות החודשיות שלכם ביחד, ואת הפירוט לפי כל אחד."
+  },
+  {
+    target: ".stat-card",
+    title: "כרטיסיות סטטיסטיקה",
+    desc: "בלחיצה על כל כרטיסייה תוכלו לראות פירוט — כמה הכנסתם, כמה הוצאתם, כמה נשאר."
+  },
+  {
+    target: '[data-view="reports"]',
+    title: "דוחות וניתוח 📈",
+    desc: "פילוח הוצאות לפי קטגוריה, גרף חודשי, השוואה לחודש קודם — הכל אוטומטי."
+  },
+  {
+    target: '[data-view="maaser"]',
+    title: "מעשרות 🤲",
+    desc: "אם אתם מוציאים מעשרות — האפליקציה מחשבת 10% מההכנסות ועוקבת אחרי התשלומים. מופעל בהגדרות."
+  },
+  {
+    target: '[data-view="settings"]',
+    title: "הגדרות ⚙️",
+    desc: "ניהול קטגוריות, הפעלת מעשרות, סימון עצמאי, ייצוא/ייבוא נתונים — הכל כאן."
+  },
+  {
+    target: null,
+    title: "מוכנים! 🚀",
+    desc: "עכשיו אתם מכירים את הבסיס. לחצו 'סיום' וצאו לדרך."
+  }
+];
+
+let tutStep = 0;
+let tutOpenedDrawer = false;
+
+function startTutorial() {
+  tutStep = 0;
+  window._tutorialShown = true;
+  document.getElementById("tutorial-overlay").classList.remove("hidden");
+  renderTutorialStep();
+}
+
+function renderTutorialStep() {
+  const step = TUTORIAL_STEPS[tutStep];
+  document.getElementById("tutorial-title").textContent = step.title;
+  document.getElementById("tutorial-desc").textContent = step.desc;
+  document.getElementById("tutorial-step-label").textContent = `שלב ${tutStep + 1} מתוך ${TUTORIAL_STEPS.length}`;
+  document.getElementById("tutorial-next").textContent =
+    tutStep === TUTORIAL_STEPS.length - 1 ? "סיום ✓" : "הבא ›";
+
+  // Clear previous highlight
+  document.querySelectorAll(".tutorial-highlight").forEach(el => el.classList.remove("tutorial-highlight"));
+  const spotlight = document.getElementById("tutorial-spotlight");
+  spotlight.style.display = "none";
+
+  if (step.target) {
+    // For drawer items - make sure drawer is open
+    const isDrawerItem = step.target.includes('data-view="reports"') ||
+                         step.target.includes('data-view="maaser"') ||
+                         step.target.includes('data-view="settings"');
+    if (isDrawerItem && !tutOpenedDrawer) {
+      document.getElementById("drawer-overlay").classList.remove("hidden");
+      tutOpenedDrawer = true;
+    }
+
+    const el = document.querySelector(step.target);
+    if (el) {
+      el.classList.add("tutorial-highlight");
+      const rect = el.getBoundingClientRect();
+      // Position spotlight
+      const pad = 8;
+      spotlight.style.cssText = `
+        display:block;
+        top:${rect.top - pad + window.scrollY}px;
+        left:${rect.left - pad}px;
+        width:${rect.width + pad*2}px;
+        height:${rect.height + pad*2}px;
+        border-radius:14px;
+      `;
+      // Scroll element into view
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  } else {
+    // Close drawer if open
+    if (tutOpenedDrawer) {
+      document.getElementById("drawer-overlay").classList.add("hidden");
+      tutOpenedDrawer = false;
+    }
+  }
+}
+
+function nextTutorialStep() {
+  if (tutStep === TUTORIAL_STEPS.length - 1) { endTutorial(); return; }
+  tutStep++;
+  renderTutorialStep();
+}
+
+function endTutorial() {
+  document.getElementById("tutorial-overlay").classList.add("hidden");
+  document.querySelectorAll(".tutorial-highlight").forEach(el => el.classList.remove("tutorial-highlight"));
+  if (tutOpenedDrawer) {
+    document.getElementById("drawer-overlay").classList.add("hidden");
+    tutOpenedDrawer = false;
+  }
+  configRef.set({ tutorialDone: true }, { merge: true });
+}
 
 /* ============================================================
    CONTACT VIEW

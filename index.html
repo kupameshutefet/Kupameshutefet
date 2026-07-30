@@ -626,6 +626,8 @@
     <div class="panel">
       <div class="panel-head"><h2>החשבון שלנו</h2></div>
       <p class="panel-desc" id="settings-user-email"></p>
+      <button id="restart-tutorial-btn" class="submit-btn" style="background:var(--purple-tint);color:var(--purple);margin-bottom:8px;">🎓 הפעל מדריך מחדש</button>
+      <button id="restart-setup-btn" class="submit-btn" style="background:var(--teal-tint);color:var(--yosef);margin-bottom:8px;">💰 הגדר יתרות מחדש</button>
       <button id="logout-btn" class="submit-btn logout-btn">יציאה מהחשבון</button>
     </div>
     <div class="panel danger-panel">
@@ -720,6 +722,35 @@
     </div>
   </section>
 
+</div>
+
+<!-- Financial Setup Wizard -->
+<div id="setup-wizard-overlay" class="setup-wizard-overlay hidden">
+  <div class="setup-wizard-card">
+    <div class="setup-wizard-head">
+      <div class="setup-step-dots" id="setup-step-dots"></div>
+      <button class="onboard-skip" id="setup-skip-btn">דלג</button>
+    </div>
+    <div id="setup-slides"></div>
+    <div class="setup-nav">
+      <button class="link-btn" id="setup-back-btn" style="opacity:0;pointer-events:none;">‹ הקודם</button>
+      <button class="submit-btn" id="setup-next-btn" style="flex:1;margin-inline-start:12px;">הבא ›</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tutorial overlay -->
+<div id="tutorial-overlay" class="tutorial-overlay hidden">
+  <div id="tutorial-spotlight" class="tutorial-spotlight"></div>
+  <div id="tutorial-bubble" class="tutorial-bubble">
+    <div id="tutorial-step-label" class="tutorial-step-label">שלב 1 מתוך 8</div>
+    <h3 id="tutorial-title"></h3>
+    <p id="tutorial-desc"></p>
+    <div class="tutorial-nav">
+      <button id="tutorial-skip" class="link-btn" onclick="endTutorial()">סיים</button>
+      <button id="tutorial-next" class="submit-btn" onclick="nextTutorialStep()">הבא ›</button>
+    </div>
+  </div>
 </div>
 
 <!-- Floating add button -->
@@ -1089,7 +1120,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 
 <!-- Service Worker registration -->
 <script>
