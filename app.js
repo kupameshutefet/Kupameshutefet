@@ -359,11 +359,20 @@ let adminTestMode = false;
 let onboardSlide = 0;
 
 async function writeNewUserData(uid, email, accountType, p1Name, p2Name, kupahName) {
+  // Check if email was pre-authorized via landing page payment
+  const emailId = email.toLowerCase().replace(/[.@]/g, '_');
+  let isPaid = false;
+  try {
+    const authDoc = await db.collection("authorizedEmails").doc(emailId).get();
+    isPaid = authDoc.exists;
+  } catch(e) { /* if can't read, default to pending */ }
+
   const batch = db.batch();
   batch.set(userStatusRef.doc(uid), {
     email, uid, partner1Name: p1Name, partner2Name: p2Name || null,
     accountType, kupahName: kupahName || "הקופה המשותפת",
-    status: "pending", registeredAt: firebase.firestore.Timestamp.now()
+    status: isPaid ? "active" : "pending",
+    registeredAt: firebase.firestore.Timestamp.now()
   });
   const defaultCfg = {
     partner1Name: p1Name, partner2Name: p2Name || null, accountType,
@@ -375,6 +384,9 @@ async function writeNewUserData(uid, email, accountType, p1Name, p2Name, kupahNa
   };
   batch.set(db.collection("users").doc(uid).collection("meta").doc("config"), defaultCfg);
   await batch.commit();
+  if (isPaid) {
+    showToast("✅ תשלום אומת — ברוכים הבאים!");
+  }
 }
 
 /* ── Admin button on auth screen ── */
