@@ -50,7 +50,7 @@
       <p class="auth-tagline">ניהול כספים חכם</p>
     </div>
     <button type="button" class="pwa-hint-btn" onclick="document.getElementById('pwa-modal-overlay').classList.remove('hidden')">
-      📲 איך להוסיף למסך הבית?
+      📲 הוסיפו למסך הבית עכשיו — חוויה של אפליקציה אמיתית!
     </button>
     <div class="tab-switch auth-tabs">
       <button class="tab-btn active" data-auth-tab="login">כניסה</button>
@@ -103,6 +103,7 @@
     <p id="auth-error" class="auth-error hidden"></p>
     <p id="auth-loading" class="auth-loading hidden">טוען...</p>
     <button type="button" id="admin-login-btn" class="admin-login-link">🔐 כניסת מנהל</button>
+    <p class="auth-copyright">© כל הזכויות שמורות ליוסף טרייסמן</p>
   </div>
 </div>
 
@@ -112,7 +113,7 @@
     <div class="pending-icon">📬</div>
     <h2>בקשת ההרשמה נשלחה!</h2>
     <p class="pending-text">קיבלנו את פרטיכם ואנחנו בבדיקה. נודיע לכם בהקדם כשהחשבון מאושר.</p>
-    <p class="pending-email">שאלות? <a href="mailto:yosetre@icloud.com">yosetre@icloud.com</a></p>
+    <p class="pending-email">שאלות? <a href="mailto:Kupameshutefet@gmail.com">Kupameshutefet@gmail.com</a></p>
     <button id="pending-logout-btn" class="submit-btn" style="margin-top:16px">חזרה למסך הכניסה</button>
   </div>
 </div>
@@ -147,38 +148,53 @@
   </div>
 </div>
 
-<!-- Onboarding slides -->
+<!-- Onboarding — centered welcome modal -->
 <div id="onboarding-overlay" class="onboarding-overlay hidden">
-  <div class="onboard-card">
-    <button class="onboard-skip" id="onboard-skip-btn">דלג</button>
+  <div class="onboard-backdrop"></div>
+  <div class="onboard-card onboard-card-center">
     <div id="onboard-slides">
       <div class="onboard-slide active" data-slide="0">
-        <div class="onboard-emoji">🎉</div>
+        <img src="icon-180.png" style="width:72px;height:72px;border-radius:20px;margin-bottom:12px;">
         <h2 id="onboard-welcome-title">ברוכים הבאים!</h2>
-        <p>הקופה שלכם מוכנה. נסייר יחד בפיצ'רים הראשיים — 30 שניות בלבד.</p>
+        <p>הקופה המשותפת היא לא אפליקציה לחיסכון.</p>
+        <p style="margin-top:8px;">היא כלי לשליטה <strong>מלאה</strong> על כל הכספים שלכם — תמונת מצב אמיתית, בזמן אמת, בכף היד.</p>
       </div>
       <div class="onboard-slide" data-slide="1">
-        <div class="onboard-emoji">💸</div>
-        <h2>הוספת הוצאות</h2>
-        <p>לחצו על <strong>+</strong> בתחתית המסך. בחרו קטגוריה, סכום ומי שילם — זהו!</p>
-      </div>
-      <div class="onboard-slide" data-slide="2">
         <div class="onboard-emoji">📊</div>
-        <h2>דוחות וניתוחים</h2>
-        <p>פילוח לפי קטגוריה, השוואה לחודש קודם, ויתרות עדכניות — הכל אוטומטי.</p>
-      </div>
-      <div class="onboard-slide" data-slide="3">
-        <div class="onboard-emoji">📲</div>
-        <h2>הוסיפו למסך הבית</h2>
-        <p>ספארי ← כפתור שיתוף ← "הוסף למסך הבית" — חוויה של אפליקציה מלאה.</p>
+        <h2>מה תמצאו כאן?</h2>
+        <div class="onboard-feature-list">
+          <div class="onboard-feature">💸 מעקב הוצאות והכנסות</div>
+          <div class="onboard-feature">🏦 יתרות עדכניות לכל ארנק</div>
+          <div class="onboard-feature">📈 דוחות וניתוחים אוטומטיים</div>
+          <div class="onboard-feature">🔁 תנועות קבועות וחובות</div>
+          <div class="onboard-feature">🤲 מעשרות (אם רלוונטי)</div>
+        </div>
       </div>
     </div>
     <div class="onboard-dots" id="onboard-dots">
       <span class="onboard-dot active"></span><span class="onboard-dot"></span>
-      <span class="onboard-dot"></span><span class="onboard-dot"></span>
     </div>
     <button class="submit-btn" id="onboard-next-btn">הבא ›</button>
+    <button class="onboard-skip" id="onboard-skip-btn" style="position:static;margin-top:10px;display:block;text-align:center;">דלג על הסבר</button>
   </div>
+</div>
+
+<!-- Declined account screen -->
+<div id="declined-overlay" class="pending-overlay hidden">
+  <div class="pending-card">
+    <div class="pending-icon">❌</div>
+    <h2>הבקשה נדחתה</h2>
+    <p class="pending-text">בקשת ההרשמה שלך לא אושרה הפעם.</p>
+    <p class="pending-email">שאלות? <a href="mailto:Kupameshutefet@gmail.com">Kupameshutefet@gmail.com</a></p>
+    <button id="declined-logout-btn" class="submit-btn" style="margin-top:16px">חזרה למסך הכניסה</button>
+  </div>
+</div>
+
+<!-- Add to home screen one-time banner (inside app) -->
+<div id="pwa-app-banner" class="pwa-app-banner hidden">
+  <span>📲 הוסיפו למסך הבית לחוויה מיטבית</span>
+  <button onclick="document.getElementById('pwa-modal-overlay').classList.remove('hidden')" class="pwa-app-banner-btn">איך?</button>
+  <button onclick="dismissPwaBanner()" class="pwa-app-banner-close">✕</button>
 </div>
 
 <!-- Admin panel — shown only to yosetre@icloud.com -->
@@ -281,6 +297,11 @@
 
   <!-- ============== DASHBOARD VIEW ============== -->
   <section class="view" data-view="dashboard">
+    <!-- Rotating financial quotes -->
+    <div class="quotes-banner" id="quotes-banner">
+      <span class="quotes-icon">💡</span>
+      <span id="quotes-text" class="quotes-text"></span>
+    </div>
 
     <div class="month-bar">
       <button id="prev-month" class="month-arrow" aria-label="חודש קודם">‹</button>
@@ -622,6 +643,20 @@
       <div class="panel-head"><h2>ייצוא נתונים</h2></div>
       <p class="panel-desc">מוריד קובץ CSV עם כל ההוצאות וההכנסות, שאפשר לפתוח או לייבא ישירות ל-Google Sheets.</p>
       <button id="export-csv-btn" class="submit-btn">ייצוא ל-CSV</button>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>תמונת פרופיל</h2></div>
+      <div class="profile-pic-section">
+        <div id="profile-pic-display" class="profile-pic-display">
+          <span id="profile-pic-initial">?</span>
+          <img id="profile-pic-img" class="hidden" alt="תמונת פרופיל">
+        </div>
+        <div>
+          <input type="file" id="profile-pic-input" accept="image/*" class="hidden">
+          <button id="profile-pic-btn" class="mini-btn" style="display:block;margin-bottom:6px;">📷 בחר תמונה</button>
+          <button id="profile-pic-remove" class="link-btn hidden">הסר תמונה</button>
+        </div>
+      </div>
     </div>
     <div class="panel">
       <div class="panel-head"><h2>החשבון שלנו</h2></div>
@@ -1120,7 +1155,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 
 <!-- Service Worker registration -->
 <script>

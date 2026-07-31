@@ -17,6 +17,7 @@ const auth = firebase.auth();
 const accessCodesRef = db.collection("accessCodes");
 const userStatusRef  = db.collection("userStatus");
 const ADMIN_EMAIL = "yosetre@icloud.com";
+const CONTACT_EMAIL = "Kupameshutefet@gmail.com";
 
 // Firestore refs — set per-user after login
 let expensesRef, incomeRef, debtsRef, recurringRef, eventsRef, configRef;
@@ -84,10 +85,12 @@ function startFirestoreListeners() {
         accountType: data.accountType || "couple",
         onboardingDone: data.onboardingDone || false,
         setupDone: data.setupDone || false,
-        tutorialDone: data.tutorialDone || false
+        tutorialDone: data.tutorialDone || false,
+        profilePic: data.profilePic || null
       };
       const titleEl = document.getElementById("app-title");
       if (titleEl) titleEl.textContent = config.kupahName || "הקופה המשותפת";
+      updateProfilePicDisplay();
       const appVisible = document.getElementById("app") && !document.getElementById("app").classList.contains("app-hidden");
       if (appVisible) {
         if (!config.onboardingDone) { showOnboarding(config.kupahName); }
@@ -202,12 +205,15 @@ function showApp(user) {
   document.getElementById("auth-overlay").classList.add("hidden");
   document.getElementById("admin-overlay").classList.add("hidden");
   document.getElementById("pending-overlay").classList.add("hidden");
+  document.getElementById("declined-overlay").classList.add("hidden");
   document.getElementById("google-onboard-overlay").classList.add("hidden");
   document.getElementById("app").classList.remove("app-hidden");
   initFirestoreRefs(user.uid);
   startFirestoreListeners();
   const emailEl = document.getElementById("settings-user-email");
   if (emailEl) emailEl.textContent = user.email;
+  startQuotesRotation();
+  showPwaBanner();
   checkAppVersion();
 }
 
@@ -225,7 +231,13 @@ auth.onAuthStateChanged(async (user) => {
         const status = statusDoc.exists ? statusDoc.data().status : "pending";
         if (status === "blocked") {
           await auth.signOut();
-          showAuthError("החשבון שלך חסום. לפרטים: " + ADMIN_EMAIL);
+          showAuthError("החשבון שלך חסום. לפרטים: " + CONTACT_EMAIL);
+          return;
+        }
+        if (status === "declined") {
+          document.getElementById("auth-overlay").classList.add("hidden");
+          document.getElementById("app").classList.add("app-hidden");
+          document.getElementById("declined-overlay").classList.remove("hidden");
           return;
         }
         if (status === "pending") {
@@ -246,6 +258,7 @@ auth.onAuthStateChanged(async (user) => {
     document.getElementById("auth-overlay").classList.remove("hidden");
     document.getElementById("admin-overlay").classList.add("hidden");
     document.getElementById("pending-overlay").classList.add("hidden");
+    document.getElementById("declined-overlay").classList.add("hidden");
     document.getElementById("app").classList.add("app-hidden");
   }
 });
@@ -371,7 +384,9 @@ document.getElementById("admin-login-btn").addEventListener("click", () => {
 });
 
 /* ── Pending logout ── */
-document.getElementById("pending-logout-btn").addEventListener("click", () => auth.signOut());
+document.getElementById("declined-logout-btn").addEventListener("click", () => auth.signOut());
+
+document.getElementById("declined-logout-btn").addEventListener("click", () => auth.signOut());
 
 /* ── Google sign-in ── */
 document.getElementById("google-signin-btn").addEventListener("click", async () => {
@@ -428,15 +443,17 @@ function showOnboarding(kupahName) {
 function updateOnboardSlide() {
   document.querySelectorAll(".onboard-slide").forEach((s, i) => s.classList.toggle("active", i === onboardSlide));
   document.querySelectorAll(".onboard-dot").forEach((d, i) => d.classList.toggle("active", i === onboardSlide));
+  const totalSlides = document.querySelectorAll(".onboard-slide").length;
   const btn = document.getElementById("onboard-next-btn");
-  btn.textContent = onboardSlide === 3 ? "בואו נתחיל! 🚀" : "הבא ›";
+  btn.textContent = onboardSlide === totalSlides - 1 ? "בואו נתחיל! ›" : "הבא ›";
 }
 function finishOnboarding() {
   document.getElementById("onboarding-overlay").classList.add("hidden");
   if (configRef) configRef.set({ onboardingDone: true }, { merge: true });
 }
 document.getElementById("onboard-next-btn").addEventListener("click", () => {
-  if (onboardSlide < 3) { onboardSlide++; updateOnboardSlide(); }
+  const totalSlides = document.querySelectorAll(".onboard-slide").length;
+  if (onboardSlide < totalSlides - 1) { onboardSlide++; updateOnboardSlide(); }
   else finishOnboarding();
 });
 document.getElementById("onboard-skip-btn").addEventListener("click", finishOnboarding);
@@ -1860,9 +1877,12 @@ function renderMaaserView() {
   const { totalIncome, owed, paid, remaining } = computeMaaserData();
   const card = document.getElementById("maaser-hero");
   card.className = "maaser-hero " + (remaining > 0 ? "maaser-owes" : "maaser-clear");
-  document.getElementById("maaser-owed-fig").textContent = `${Math.round(owed).toLocaleString()} ₪`;
-  document.getElementById("maaser-hero-sub").textContent =
-    remaining > 0 ? `נשאר לשלם ${Math.round(remaining).toLocaleString()}₪` : `✅ המעשרות שולמו במלואם!`;
+  document.getElementById("maaser-owed-fig").textContent = remaining > 0
+    ? `${Math.round(remaining).toLocaleString()} ₪`
+    : "✅ שולם!";
+  document.getElementById("maaser-hero-sub").textContent = remaining > 0
+    ? `נשאר לשלם מתוך חובה כוללת של ${Math.round(owed).toLocaleString()}₪`
+    : `המעשרות שולמו במלואם — ${Math.round(owed).toLocaleString()}₪`;
   document.getElementById("maaser-total-income").textContent = `${Math.round(totalIncome).toLocaleString()}₪`;
   document.getElementById("maaser-owed-stat").textContent = `${Math.round(owed).toLocaleString()}₪`;
   document.getElementById("maaser-paid-total").textContent = `${Math.round(paid).toLocaleString()}₪`;
@@ -2024,9 +2044,12 @@ async function loadAdminUsers() {
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
           <span class="admin-status-badge ${badgeClass}">${statusLabel}</span>
-          ${isPending ? `<button class="admin-action-btn" style="background:#E6F8EC;color:#1F8A4D;" onclick="setUserStatus('${doc.id}','active',this)">✅ אשר</button>` : ""}
-          ${!isPending && !isBlocked ? `<button class="admin-action-btn" onclick="setUserStatus('${doc.id}','blocked',this)">🔒 חסום</button>` : ""}
-          ${isBlocked ? `<button class="admin-action-btn" onclick="setUserStatus('${doc.id}','active',this)">🔓 פתח</button>` : ""}
+          ${isPending ? `
+            <button class="admin-action-btn" style="background:#E6F8EC;color:#1F8A4D;" onclick="setUserStatus('${doc.id}','active',this)">✅ אשר</button>
+            <button class="admin-action-btn" style="background:#FCEAEF;color:#C94B6E;margin-top:4px;" onclick="setUserStatus('${doc.id}','declined',this)">❌ דחה</button>
+          ` : ""}
+          ${!isPending && !isBlocked && status !== "declined" ? `<button class="admin-action-btn" onclick="setUserStatus('${doc.id}','blocked',this)">🔒 חסום</button>` : ""}
+          ${isBlocked || status === "declined" ? `<button class="admin-action-btn" onclick="setUserStatus('${doc.id}','active',this)">🔓 פתח</button>` : ""}
         </div>
       </div>`;
     }).join("");
@@ -2621,6 +2644,91 @@ async function deleteInquiry(id, btn) {
 /* ============================================================
    15) Init
    ============================================================ */
+const QUOTES = [
+  "מי שלא שולט בכספיו — כספיו שולטים בו",
+  "לא מה שמרוויחים קובע — אלא מה ששומרים",
+  "כל שקל שאתם מכירים — שקל שעובד בשבילכם",
+  "שליטה בכסף מתחילה בהכרת המספרים",
+  "הדרך לחופש כלכלי עוברת דרך מודעות יומיומית",
+  "תקציב זה לא מגבלה — זו בחירה"
+];
+let quoteIdx = 0, quoteTimer = null;
+function startQuotesRotation() {
+  const el = document.getElementById("quotes-text");
+  if (!el) return;
+  el.textContent = QUOTES[quoteIdx];
+  clearInterval(quoteTimer);
+  quoteTimer = setInterval(() => {
+    el.style.opacity = "0";
+    setTimeout(() => {
+      quoteIdx = (quoteIdx + 1) % QUOTES.length;
+      el.textContent = QUOTES[quoteIdx];
+      el.style.opacity = "1";
+    }, 400);
+  }, 5000);
+}
+
+/* ── Profile picture ── */
+document.getElementById("profile-pic-btn").addEventListener("click", () => {
+  document.getElementById("profile-pic-input").click();
+});
+document.getElementById("profile-pic-input").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const canvas = document.createElement("canvas");
+    const img = new window.Image();
+    img.onload = () => {
+      const size = 200;
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      const scale = Math.max(size/img.width, size/img.height);
+      const dx = (size - img.width*scale)/2, dy = (size - img.height*scale)/2;
+      ctx.drawImage(img, dx, dy, img.width*scale, img.height*scale);
+      const compressed = canvas.toDataURL("image/jpeg", 0.7);
+      configRef.set({ profilePic: compressed }, { merge: true });
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value = "";
+});
+document.getElementById("profile-pic-remove").addEventListener("click", () => {
+  configRef.set({ profilePic: null }, { merge: true });
+});
+function updateProfilePicDisplay() {
+  const pic = config.profilePic;
+  const img = document.getElementById("profile-pic-img");
+  const initial = document.getElementById("profile-pic-initial");
+  const removeBtn = document.getElementById("profile-pic-remove");
+  if (pic) {
+    img.src = pic; img.classList.remove("hidden"); initial.classList.add("hidden");
+    if (removeBtn) removeBtn.classList.remove("hidden");
+    // Update topbar avatar
+    const a1 = document.getElementById("avatar-p1");
+    if (a1) { a1.style.backgroundImage = `url(${pic})`; a1.style.backgroundSize = "cover"; a1.textContent = ""; }
+  } else {
+    img.classList.add("hidden"); initial.classList.remove("hidden");
+    initial.textContent = p1() ? p1()[0] : "?";
+    if (removeBtn) removeBtn.classList.add("hidden");
+    const a1 = document.getElementById("avatar-p1");
+    if (a1) { a1.style.backgroundImage = ""; a1.textContent = p1() ? p1()[0] : "?"; }
+  }
+}
+
+/* ── PWA app banner ── */
+function showPwaBanner() {
+  const shown = localStorage.getItem("pwaBannerDismissed");
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+  if (!shown && !isStandalone) {
+    setTimeout(() => document.getElementById("pwa-app-banner").classList.remove("hidden"), 3000);
+  }
+}
+function dismissPwaBanner() {
+  document.getElementById("pwa-app-banner").classList.add("hidden");
+  localStorage.setItem("pwaBannerDismissed", "1");
+}
 // Startup is driven by auth.onAuthStateChanged above.
 // Hide app until auth confirmed.
 document.getElementById("app").classList.add("app-hidden");
