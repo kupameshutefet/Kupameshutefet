@@ -2,7 +2,7 @@
    Service Worker — הקופה המשותפת
    עדכן את CACHE_VERSION בכל פריסה חדשה
    ============================================================ */
-const CACHE_VERSION = 11;
+const CACHE_VERSION = 13;
 const CACHE_NAME = `kupa-v${CACHE_VERSION}`;
 
 const PRECACHE_FILES = [

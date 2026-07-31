@@ -167,6 +167,11 @@ function updatePartnerNamesInUI() {
   const a2 = document.getElementById("avatar-p2"); if (a2) a2.textContent = n2 ? n2[0] : "";
   const sub = document.getElementById("brand-sub");
   if (sub) sub.textContent = isSolo ? n1 : `${n1} ו${n2}`;
+  // Hero labels
+  const heroEyebrow = document.getElementById("hero-eyebrow");
+  if (heroEyebrow) heroEyebrow.textContent = isSolo ? "סך ההוצאות שלי החודש" : "סך ההוצאות המשותפות החודש";
+  const financesEyebrow = document.getElementById("finances-hero-eyebrow");
+  if (financesEyebrow) financesEyebrow.textContent = isSolo ? "כל הכסף שלי" : "כל הכסף שלנו, ביחד";
   const fhs = document.getElementById("finances-hero-sub");
   if (fhs) fhs.textContent = isSolo ? `${n1} + מזומן + חיסכון, הכל ביחד` : `${n1} + ${n2} + מזומן + חיסכון, הכל ביחד`;
 
@@ -366,7 +371,7 @@ async function writeNewUserData(uid, email, accountType, p1Name, p2Name, kupahNa
     categories: DEFAULT_CATEGORIES, incomeCategories: DEFAULT_INCOME_CATEGORIES,
     budgets: {},
     accountBalances: accountType === "couple" ? { [p1Name]: 0, [p2Name]: 0, "מזומן": 0 } : { [p1Name]: 0, "מזומן": 0 },
-    savingsGoals: [], maaserEnabled: false, isSelfEmployed: false, onboardingDone: false
+    savingsGoals: [], maaserEnabled: true, isSelfEmployed: false, onboardingDone: false
   };
   batch.set(db.collection("users").doc(uid).collection("meta").doc("config"), defaultCfg);
   await batch.commit();
@@ -2205,35 +2210,55 @@ document.getElementById("admin-refresh-btn").addEventListener("click", () => loa
 let setupStep = 0;
 let setupData = {};
 
+function formatSetupNumber(input) {
+  const raw = input.value.replace(/,/g, "");
+  const num = parseFloat(raw);
+  if (!isNaN(num) && Number.isInteger(num)) {
+    const pos = input.selectionStart;
+    const before = (input.value.slice(0, pos).replace(/,/g, "")).length;
+    input.value = num.toLocaleString("en-US");
+    // Find new cursor position
+    let count = 0, newPos = 0;
+    for (let i = 0; i < input.value.length; i++) {
+      if (input.value[i] !== ",") count++;
+      if (count === before) { newPos = i + 1; break; }
+    }
+    try { input.setSelectionRange(newPos, newPos); } catch(e) {}
+  }
+}
+function parseSetupNumber(id) {
+  const el = document.getElementById(id);
+  if (!el) return 0;
+  return parseFloat(el.value.replace(/,/g, "")) || 0;
+}
+
 function buildSetupSlides() {
   const isSolo = soloMode();
   const n1 = p1(), n2 = p2();
   const slides = [];
 
-  // Slide 0 — welcome
   slides.push({
     id: "welcome",
     html: `<div class="setup-slide-inner">
-      <div class="setup-emoji">💰</div>
+      <div class="setup-emoji">🗺️</div>
       <h2>הגדרת יתרות פתיחה</h2>
-      <p>בשביל שנוכל לחשב נכון כמה כסף יש לכם ביחד — ספרו לנו מה המצב הנוכחי. זה לוקח 2 דקות.</p>
+      <p>כדי לקבל <strong>תמונת מצב מדויקת</strong> של המצב הכלכלי שלכם היום — ומשם להתחיל לשלוט באופן מלא.</p>
+      <div class="setup-info-box">💡 תמיד ניתן לעדכן את הסכומים מאוחר יותר דרך ההגדרות</div>
     </div>`
   });
 
-  // Slide 1 — partner1 balances
   slides.push({
     id: "p1",
     html: `<div class="setup-slide-inner">
       <div class="setup-emoji">👤</div>
-      <h2>יתרות של ${n1}</h2>
+      <h2>${isSolo ? "הכסף שלך" : `יתרות של ${n1}`}</h2>
       <label class="field"><span>עו"ש (עובר ושב) ₪</span>
-        <input type="number" id="setup-p1-bank" inputmode="decimal" min="0" placeholder="0"></label>
+        <input type="text" id="setup-p1-bank" inputmode="decimal" placeholder="0" oninput="formatSetupNumber(this)"></label>
       <label class="field"><span>ביט / פייבוקס ₪</span>
-        <input type="number" id="setup-p1-bit" inputmode="decimal" min="0" placeholder="0"></label>
+        <input type="text" id="setup-p1-bit" inputmode="decimal" placeholder="0" oninput="formatSetupNumber(this)"></label>
     </div>`
   });
 
-  // Slide 2 — partner2 (couple only)
   if (!isSolo) {
     slides.push({
       id: "p2",
@@ -2241,51 +2266,48 @@ function buildSetupSlides() {
         <div class="setup-emoji">👩</div>
         <h2>יתרות של ${n2}</h2>
         <label class="field"><span>עו"ש (עובר ושב) ₪</span>
-          <input type="number" id="setup-p2-bank" inputmode="decimal" min="0" placeholder="0"></label>
+          <input type="text" id="setup-p2-bank" inputmode="decimal" placeholder="0" oninput="formatSetupNumber(this)"></label>
         <label class="field"><span>ביט / פייבוקס ₪</span>
-          <input type="number" id="setup-p2-bit" inputmode="decimal" min="0" placeholder="0"></label>
+          <input type="text" id="setup-p2-bit" inputmode="decimal" placeholder="0" oninput="formatSetupNumber(this)"></label>
       </div>`
     });
   }
 
-  // Slide 3 — cash
   slides.push({
     id: "cash",
     html: `<div class="setup-slide-inner">
       <div class="setup-emoji">💵</div>
       <h2>מזומן</h2>
-      <label class="field"><span>כמה מזומן יש לכם ביחד? ₪</span>
-        <input type="number" id="setup-cash" inputmode="decimal" min="0" placeholder="0"></label>
+      <label class="field"><span>${isSolo ? "כמה מזומן יש לך כיום? ₪" : "כמה מזומן יש לכם ביחד? ₪"}</span>
+        <input type="text" id="setup-cash" inputmode="decimal" placeholder="0" oninput="formatSetupNumber(this)"></label>
     </div>`
   });
 
-  // Slide 4 — savings
   slides.push({
     id: "savings",
     html: `<div class="setup-slide-inner">
       <div class="setup-emoji">🏦</div>
       <h2>חסכונות</h2>
       <label class="field"><span>סכום חסכונות כולל ₪</span>
-        <input type="number" id="setup-savings-total" inputmode="decimal" min="0" placeholder="0"></label>
+        <input type="text" id="setup-savings-total" inputmode="decimal" placeholder="0" oninput="formatSetupNumber(this)"></label>
       <div class="field">
         <span>יעדי חיסכון (אופציונלי)</span>
         <div id="setup-goals-list" class="setup-goals-list"></div>
         <div class="setup-goal-add-row">
-          <input type="text" id="setup-goal-name" placeholder='למשל: "נסיעה לאירופה"' style="flex:1;">
-          <input type="number" id="setup-goal-target" inputmode="decimal" placeholder="יעד ₪" style="width:100px;">
+          <input type="text" id="setup-goal-name" placeholder='למשל: "נסיעה לאירופה"'>
+          <input type="text" id="setup-goal-target" inputmode="decimal" placeholder="יעד ₪" style="width:100px;" oninput="formatSetupNumber(this)">
           <button type="button" onclick="addSetupGoal()" class="mini-btn">+</button>
         </div>
       </div>
     </div>`
   });
 
-  // Slide 5 — done
   slides.push({
     id: "done",
     html: `<div class="setup-slide-inner">
       <div class="setup-emoji">✅</div>
-      <h2>מוכנים!</h2>
-      <p>היתרות נשמרו. תוכלו לעדכן אותן בכל עת דרך <strong>כספים וחסכונות</strong>.</p>
+      <h2>מוכן!</h2>
+      <p>היתרות נשמרו. לעדכון עתידי — לחצו "💰 הגדר יתרות מחדש" בהגדרות.</p>
       <div id="setup-summary" class="setup-summary"></div>
     </div>`
   });
@@ -2318,15 +2340,15 @@ function removeSetupGoal(i) { setupGoals.splice(i, 1); renderSetupGoals(); }
 function collectSetupStep() {
   const slide = setupSlides[setupStep];
   if (slide.id === "p1") {
-    setupData.p1Bank  = parseFloat(document.getElementById("setup-p1-bank")?.value) || 0;
-    setupData.p1Bit   = parseFloat(document.getElementById("setup-p1-bit")?.value)  || 0;
+    setupData.p1Bank = parseSetupNumber("setup-p1-bank");
+    setupData.p1Bit  = parseSetupNumber("setup-p1-bit");
   } else if (slide.id === "p2") {
-    setupData.p2Bank  = parseFloat(document.getElementById("setup-p2-bank")?.value) || 0;
-    setupData.p2Bit   = parseFloat(document.getElementById("setup-p2-bit")?.value)  || 0;
+    setupData.p2Bank = parseSetupNumber("setup-p2-bank");
+    setupData.p2Bit  = parseSetupNumber("setup-p2-bit");
   } else if (slide.id === "cash") {
-    setupData.cash    = parseFloat(document.getElementById("setup-cash")?.value)     || 0;
+    setupData.cash   = parseSetupNumber("setup-cash");
   } else if (slide.id === "savings") {
-    setupData.savings = parseFloat(document.getElementById("setup-savings-total")?.value) || 0;
+    setupData.savings = parseSetupNumber("setup-savings-total");
   }
 }
 
@@ -2402,127 +2424,64 @@ document.getElementById("setup-skip-btn").addEventListener("click", async () => 
 /* ============================================================
    INTERACTIVE TUTORIAL
    ============================================================ */
+/* ============================================================
+   INTERACTIVE TUTORIAL — navigates to real views
+   ============================================================ */
 const TUTORIAL_STEPS = [
-  {
-    target: null,
-    title: "ברוכים הבאים! 🎉",
-    desc: "בואו נסייר יחד בפיצ'רים הראשיים של האפליקציה. לוחצים 'הבא' בכל שלב."
-  },
-  {
-    target: "#open-add",
-    title: "כפתור + להוספה",
-    desc: "זה הכפתור הכי חשוב — לחיצה עליו פותחת חלון להוספת הוצאה או הכנסה. פשוט וחכם."
-  },
-  {
-    target: "#open-menu",
-    title: "תפריט ניווט ☰",
-    desc: "כאן תמצאו את כל הסעיפים: הוצאות, הכנסות, כספים, דוחות, חובות, תנועות קבועות ועוד."
-  },
-  {
-    target: ".hero-card",
-    title: "לוח הבקרה 📊",
-    desc: "הכרטיסייה הראשית מראה את סך ההוצאות החודשיות שלכם ביחד, ואת הפירוט לפי כל אחד."
-  },
-  {
-    target: ".stat-card",
-    title: "כרטיסיות סטטיסטיקה",
-    desc: "בלחיצה על כל כרטיסייה תוכלו לראות פירוט — כמה הכנסתם, כמה הוצאתם, כמה נשאר."
-  },
-  {
-    target: '[data-view="reports"]',
-    title: "דוחות וניתוח 📈",
-    desc: "פילוח הוצאות לפי קטגוריה, גרף חודשי, השוואה לחודש קודם — הכל אוטומטי."
-  },
-  {
-    target: '[data-view="maaser"]',
-    title: "מעשרות 🤲",
-    desc: "אם אתם מוציאים מעשרות — האפליקציה מחשבת 10% מההכנסות ועוקבת אחרי התשלומים. מופעל בהגדרות."
-  },
-  {
-    target: '[data-view="settings"]',
-    title: "הגדרות ⚙️",
-    desc: "ניהול קטגוריות, הפעלת מעשרות, סימון עצמאי, ייצוא/ייבוא נתונים — הכל כאן."
-  },
-  {
-    target: null,
-    title: "מוכנים! 🚀",
-    desc: "עכשיו אתם מכירים את הבסיס. לחצו 'סיום' וצאו לדרך."
-  }
+  { view: "dashboard", title: "לוח הבקרה 📊", desc: "כאן תראו את סיכום החודש — סך הוצאות, הכנסות, ומי שילם מה. הכל מתעדכן בזמן אמת." },
+  { view: "dashboard", title: "כפתור ➕", desc: "הכפתור הגדול בתחתית — לחצו כדי להוסיף הוצאה או הכנסה. פשוט ומהיר.", highlight: "#open-add" },
+  { view: "expenses", title: "הוצאות 💸", desc: "כאן תמצאו את כל ההוצאות שלכם, עם אפשרות לחפש ולסנן לפי קטגוריה וחודש." },
+  { view: "income", title: "הכנסות 💰", desc: "כל ההכנסות שלכם — משכורות, בונוסים, העברות. מסודר לפי חודש." },
+  { view: "finances", title: "כספים וחסכונות 🏦", desc: "היתרה האמיתית בכל ארנק — עו\"ש, מזומן, חיסכון. ועוד: יעדי חיסכון לכל חלום." },
+  { view: "events", title: "תקציבי אירועים 🎯", desc: "טיול? שיפוץ? חתונה? כל אירוע מקבל תקציב נפרד שלא מבלבל את ההוצאות השוטפות." },
+  { view: "recurring", title: "תנועות קבועות 🔁", desc: "שכירות, נטפליקס, חדר כושר — הוסיפו אחת וזה יתווסף אוטומטית כל חודש." },
+  { view: "debts", title: "חובות 🤝", desc: "מישהו חייב לכם? אתם חייבים למישהו? עקבו, שלמו, וסגרו חובות ממקום אחד." },
+  { view: "reports", title: "דוחות וניתוח 📈", desc: "פילוח לפי קטגוריה, גרף חודשי, השוואה לחודש קודם — הכל אוטומטי." },
+  { view: "maaser", title: "מעשרות 🤲", desc: "האפליקציה מחשבת 10% מההכנסות ועוקבת אחרי מה שכבר שולם. אפשר לכבות בהגדרות." },
+  { view: "settings", title: "הגדרות ⚙️", desc: "ניהול קטגוריות, מדריך מחדש, יתרות, תמונת פרופיל — הכל כאן." },
+  { view: "contact", title: "צור קשר 💬", desc: "תקלה? המלצה? שלחו לנו הודעה ישירות מהאפליקציה — נחזור בהקדם." }
 ];
 
 let tutStep = 0;
-let tutOpenedDrawer = false;
-
 function startTutorial() {
   tutStep = 0;
   window._tutorialShown = true;
   document.getElementById("tutorial-overlay").classList.remove("hidden");
-  renderTutorialStep();
+  applyTutorialStep();
 }
-
-function renderTutorialStep() {
+function applyTutorialStep() {
   const step = TUTORIAL_STEPS[tutStep];
+  // Navigate to the right view
+  if (step.view) {
+    currentView = step.view;
+    document.querySelectorAll(".view").forEach(v => v.classList.toggle("hidden", v.dataset.view !== step.view));
+    document.querySelectorAll(".drawer-item").forEach(b => b.classList.toggle("active", b.dataset.view === step.view));
+    renderCurrentView();
+  }
+  // Close drawer if open
+  const drawer = document.getElementById("drawer-overlay");
+  if (drawer) drawer.classList.add("hidden");
+
+  // Update bubble
   document.getElementById("tutorial-title").textContent = step.title;
   document.getElementById("tutorial-desc").textContent = step.desc;
   document.getElementById("tutorial-step-label").textContent = `שלב ${tutStep + 1} מתוך ${TUTORIAL_STEPS.length}`;
-  document.getElementById("tutorial-next").textContent =
-    tutStep === TUTORIAL_STEPS.length - 1 ? "סיום ✓" : "הבא ›";
-
-  // Clear previous highlight
-  document.querySelectorAll(".tutorial-highlight").forEach(el => el.classList.remove("tutorial-highlight"));
-  const spotlight = document.getElementById("tutorial-spotlight");
-  spotlight.style.display = "none";
-
-  if (step.target) {
-    // For drawer items - make sure drawer is open
-    const isDrawerItem = step.target.includes('data-view="reports"') ||
-                         step.target.includes('data-view="maaser"') ||
-                         step.target.includes('data-view="settings"');
-    if (isDrawerItem && !tutOpenedDrawer) {
-      document.getElementById("drawer-overlay").classList.remove("hidden");
-      tutOpenedDrawer = true;
-    }
-
-    const el = document.querySelector(step.target);
-    if (el) {
-      el.classList.add("tutorial-highlight");
-      const rect = el.getBoundingClientRect();
-      // Position spotlight
-      const pad = 8;
-      spotlight.style.cssText = `
-        display:block;
-        top:${rect.top - pad + window.scrollY}px;
-        left:${rect.left - pad}px;
-        width:${rect.width + pad*2}px;
-        height:${rect.height + pad*2}px;
-        border-radius:14px;
-      `;
-      // Scroll element into view
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  } else {
-    // Close drawer if open
-    if (tutOpenedDrawer) {
-      document.getElementById("drawer-overlay").classList.add("hidden");
-      tutOpenedDrawer = false;
-    }
-  }
+  document.getElementById("tutorial-next").textContent = tutStep === TUTORIAL_STEPS.length - 1 ? "סיום ✓" : "הבא ›";
+  document.getElementById("tutorial-prev").style.opacity = tutStep === 0 ? "0" : "1";
+  document.getElementById("tutorial-prev").style.pointerEvents = tutStep === 0 ? "none" : "auto";
 }
-
 function nextTutorialStep() {
   if (tutStep === TUTORIAL_STEPS.length - 1) { endTutorial(); return; }
-  tutStep++;
-  renderTutorialStep();
+  tutStep++; applyTutorialStep();
 }
-
+function prevTutorialStep() { if (tutStep > 0) { tutStep--; applyTutorialStep(); } }
 function endTutorial() {
   document.getElementById("tutorial-overlay").classList.add("hidden");
-  document.querySelectorAll(".tutorial-highlight").forEach(el => el.classList.remove("tutorial-highlight"));
-  if (tutOpenedDrawer) {
-    document.getElementById("drawer-overlay").classList.add("hidden");
-    tutOpenedDrawer = false;
-  }
   configRef.set({ tutorialDone: true }, { merge: true });
+  // Return to dashboard
+  currentView = "dashboard";
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("hidden", v.dataset.view !== "dashboard"));
+  renderCurrentView();
 }
 
 /* ============================================================
@@ -2533,9 +2492,52 @@ let contactTopic = "תקלה";
 let contactImageData = null;
 
 function renderContactView() {
-  // Reset on open
   document.getElementById("contact-success").classList.add("hidden");
   document.getElementById("contact-send-btn").disabled = false;
+  document.getElementById("contact-send-btn").textContent = "שליחת הפנייה 📤";
+  loadUserInbox();
+}
+
+async function loadUserInbox() {
+  const user = auth.currentUser;
+  if (!user) return;
+  const inboxEl = document.getElementById("contact-inbox-list");
+  if (!inboxEl) return;
+  inboxEl.innerHTML = `<p class="admin-loading" style="font-size:13px;">טוען...</p>`;
+  try {
+    const snap = await inquiriesRef
+      .where("uid", "==", user.uid)
+      .orderBy("createdAt", "desc")
+      .get();
+    if (snap.empty) {
+      inboxEl.innerHTML = `<p class="empty-hint" style="font-size:13px;">עדיין לא שלחתם פניות</p>`;
+      return;
+    }
+    inboxEl.innerHTML = snap.docs.map((doc) => {
+      const d = doc.data();
+      const date = d.createdAt ? d.createdAt.toDate().toLocaleDateString("he-IL", { day:"numeric", month:"short", year:"numeric" }) : "—";
+      const hasReply = d.reply && d.reply.trim();
+      const statusBadge = hasReply
+        ? `<span class="inbox-badge inbox-badge-replied">✅ נענה</span>`
+        : `<span class="inbox-badge inbox-badge-pending">⏳ בטיפול</span>`;
+      return `<div class="inbox-item ${hasReply ? "inbox-item-replied" : ""}">
+        <div class="inbox-item-header">
+          <span class="inquiry-topic-badge">${escapeHtml(d.topic || "—")}</span>
+          ${statusBadge}
+          <span class="inbox-item-date">${date}</span>
+        </div>
+        <p class="inbox-item-message">${escapeHtml(d.message || "")}</p>
+        ${hasReply ? `
+          <div class="inbox-reply">
+            <div class="inbox-reply-label">💬 תגובת הצוות:</div>
+            <p class="inbox-reply-text">${escapeHtml(d.reply)}</p>
+            ${d.repliedAt ? `<span class="inbox-reply-date">${d.repliedAt.toDate().toLocaleDateString("he-IL")}</span>` : ""}
+          </div>` : ""}
+      </div>`;
+    }).join("");
+  } catch(e) {
+    inboxEl.innerHTML = `<p class="empty-hint" style="font-size:13px;color:var(--agam);">שגיאה בטעינה</p>`;
+  }
 }
 
 document.querySelectorAll(".contact-topic-btn").forEach((btn) => {
@@ -2615,11 +2617,19 @@ async function loadAdminInquiries() {
           <div class="inquiry-header">
             <span class="inquiry-topic-badge">${escapeHtml(d.topic || "—")}</span>
             <span class="inquiry-meta">${escapeHtml(d.kupahName || "—")} · ${escapeHtml(d.userEmail || "—")} · ${date}</span>
-            ${isNew ? `<span class="admin-status-badge badge-pending" style="margin-inline-start:auto">חדש</span>` : `<span class="admin-status-badge badge-active">טופל</span>`}
+            ${isNew ? `<span class="admin-status-badge badge-pending" style="margin-inline-start:auto">חדש</span>` : d.reply ? `<span class="admin-status-badge badge-active">נענה</span>` : `<span class="admin-status-badge badge-active">טופל</span>`}
           </div>
           <p class="inquiry-message">${escapeHtml(d.message || "")}</p>
           ${d.image ? `<img src="${d.image}" class="inquiry-image">` : ""}
-          <div class="inquiry-actions">
+          ${d.reply ? `<div class="admin-reply-preview">💬 תגובה: ${escapeHtml(d.reply)}</div>` : ""}
+          <div class="admin-reply-row">
+            <input type="text" class="admin-reply-input" id="reply-input-${doc.id}" 
+              placeholder="${d.reply ? "ערוך תגובה..." : "כתוב תגובה למשתמש..."}" 
+              value="${d.reply ? escapeHtml(d.reply) : ""}">
+            <button class="admin-generate-btn" style="font-size:12px;padding:8px 12px;" 
+              onclick="sendAdminReply('${doc.id}', this)">שלח</button>
+          </div>
+          <div class="inquiry-actions" style="margin-top:6px;">
             ${isNew ? `<button class="admin-action-btn" style="background:#E6F8EC;color:#1F8A4D;" onclick="markInquiryHandled('${doc.id}', this)">✅ סמן כטופל</button>` : ""}
             <button class="admin-action-btn" style="background:#FCEAEF;color:#C94B6E;" onclick="deleteInquiry('${doc.id}', this)">🗑 מחק</button>
           </div>
@@ -2627,6 +2637,24 @@ async function loadAdminInquiries() {
       }).join("");
   } catch(e) {
     listEl.innerHTML = `<p class="admin-empty" style="color:red">שגיאה: ${e.message}</p>`;
+  }
+}
+async function sendAdminReply(id, btn) {
+  const input = document.getElementById(`reply-input-${id}`);
+  const reply = input ? input.value.trim() : "";
+  if (!reply) { alert("נא לכתוב תגובה"); return; }
+  btn.disabled = true; btn.textContent = "שולח...";
+  try {
+    await inquiriesRef.doc(id).update({
+      reply,
+      repliedAt: firebase.firestore.Timestamp.now(),
+      status: "handled"
+    });
+    showToast("✅ תגובה נשלחה למשתמש");
+    await loadAdminInquiries();
+  } catch(e) {
+    alert("שגיאה: " + e.message);
+    btn.disabled = false; btn.textContent = "שלח";
   }
 }
 async function markInquiryHandled(id, btn) {
